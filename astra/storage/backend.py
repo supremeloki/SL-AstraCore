@@ -1,0 +1,71 @@
+from __future__ import annotations
+
+from typing import Protocol, Sequence, Optional, Any
+from astra.ir.models import IRNode, IREdge, NodeType, EdgeType
+
+
+class StorageBackend(Protocol):
+    """Protocol for persistent graph storage backends.
+
+    DuckDB, SQLite, and future backends implement this.
+    No backend-specific imports leak into core modules.
+    """
+
+    def connect(self) -> None: ...
+    def close(self) -> None: ...
+
+    # Node CRUD
+    def add_node(self, node: IRNode) -> None: ...
+    def get_node(self, node_id: str) -> Optional[IRNode]: ...
+    def delete_node(self, node_id: str) -> None: ...
+    def get_all_nodes(self) -> Sequence[IRNode]: ...
+
+    # Edge CRUD
+    def add_edge(self, edge: IREdge) -> None: ...
+    def get_edges(
+        self,
+        from_node: Optional[str] = None,
+        to_node: Optional[str] = None,
+        edge_type: Optional[EdgeType] = None,
+    ) -> Sequence[IREdge]: ...
+    def delete_edge(
+        self, from_node: str, to_node: str, edge_type: object
+    ) -> None: ...
+    def get_all_edges(self) -> Sequence[IREdge]: ...
+
+    # Search / Query
+    def get_nodes_by_type(self, node_type: NodeType) -> Sequence[IRNode]: ...
+    def get_nodes_by_source(self, source: str) -> Sequence[IRNode]: ...
+    def search_nodes_by_name(self, name_substring: str) -> Sequence[IRNode]: ...
+
+    # Incremental / Diff helpers
+    def get_node_ids(self) -> set[str]: ...
+    def get_edge_keys(self) -> set[tuple[str, str, str]]: ...
+
+    # Stats
+    def node_count(self) -> int: ...
+    def edge_count(self) -> int: ...
+
+
+class StorageProvider:
+    """Config-driven storage backend factory.
+
+    Usage:
+        provider = StorageProvider(backend="duckdb", db_path="...")
+        storage = provider.create()
+        storage.connect()
+    """
+
+    def __init__(self, backend: str, db_path: str) -> None:
+        self._backend_name = backend
+        self._db_path = db_path
+
+    def create(self) -> StorageBackend:
+        if self._backend_name == "duckdb":
+            from astra.storage.duckdb_backend import DuckDBBackend
+            return DuckDBBackend(self._db_path)
+        elif self._backend_name == "sqlite":
+            from astra.storage.sqlite_backend import SQLiteBackend
+            return SQLiteBackend(self._db_path)
+        else:
+            raise ValueError(f"Unknown backend: {self._backend_name}")
