@@ -1,0 +1,51 @@
+project:
+  name: SL-AstraCore
+  version: "1.0.0"
+
+scanner:
+  max_file_size_kb: 1024
+  follow_symlinks: false
+  respect_astraignore: true
+  include_hidden: true
+  worker_count: 1
+  streaming_buffer: 65536
+  hash_algorithm: sha256
+  checkpoint_path: ""
+  checkpoint_every: 1000
+
+parser:
+  languages:
+    - python
+    - javascript
+    - typescript
+    - go
+    - rust
+    - java
+    - c
+    - cpp
+    - csharp
+    - ruby
+  fallback_on_unknown: true
+
+reader:
+  line_by_line: true
+  preserve_order: true
+  max_lines_per_file: 250000
+
+vault:
+  enabled: true
+  detect_frontmatter: true
+  parse_wikilinks: true
+  parse_tags: true
+
+storage:
+  engine: duckdb
+  cache_engine: sqlite
+
+dashboard:
+  host: 0.0.0.0
+  port: 8470
+
+logging:
+  level: INFO
+  format: "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
