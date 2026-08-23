@@ -26,8 +26,6 @@ class AgentAdapter(Protocol):
 class AgentAdapterLayer:
     """Unified agent-execution interface.
 
-    Translates context packs into agent requests.
-    Translates agent responses into structured results.
     Provider-agnostic. No LLM-specific logic in Core.
     """
 
@@ -48,7 +46,6 @@ class AgentAdapterLayer:
         return tuple(self._providers)
 
     def resolve_provider(self, task_description: str) -> BaseAgentProvider:
-        # Simple resolution: prefer code-first providers for code tasks
         task_lower = task_description.lower()
         if any(kw in task_lower for kw in ("code", "implement", "refactor", "fix", "debug")):
             for p in self._providers:
