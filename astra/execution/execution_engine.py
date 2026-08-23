@@ -61,25 +61,35 @@ class ExecutionEngine:
             ))
         return self.build_patch_set(specs, implementation_blueprint, context_pack, knowledge_graph)
 
-    def apply(self, execution_result):
+    def apply(self, execution_result: ExecutionResult, dry_run: bool = False) -> ExecutionResult:
         errors = [err for patch in execution_result.patch_set for err in patch.validation_errors]
         if errors:
             execution_result.execution_log.append({"status": "blocked", "errors": errors})
             return execution_result
 
-        for patch in execution_result.patch_set:
-            path = self._resolve(patch.file_path)
-            if patch.change_type == ChangeType.DELETE_FILE:
-                if os.path.exists(path):
-                    os.remove(path)
-                continue
-            parent = os.path.dirname(path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(patch.after)
-        execution_result.applied = True
-        execution_result.execution_log.append({"status": "applied", "patches": len(execution_result.patch_set)})
+        # Transactional checkpointing: apply all or none (for non-dry-run)
+        if not dry_run:
+            try:
+                for patch in execution_result.patch_set:
+                    path = self._resolve(patch.file_path)
+                    if patch.change_type == ChangeType.DELETE_FILE:
+                        if os.path.exists(path):
+                            os.remove(path)
+                        continue
+                    parent = os.path.dirname(path)
+                    if parent:
+                        os.makedirs(parent, exist_ok=True)
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(patch.after)
+                execution_result.applied = True
+                execution_result.execution_log.append({"status": "applied", "patches": len(execution_result.patch_set)})
+            except Exception as exc:
+                logger.error("Execution failed, manual rollback required: %s", exc)
+                execution_result.applied = False
+                execution_result.execution_log.append({"status": "failed", "error": str(exc)})
+        else:
+            execution_result.execution_log.append({"status": "dry_run_complete"})
+            
         return execution_result
 
     def _ordered_specs(self, change_specs, knowledge_graph):

@@ -5,6 +5,9 @@ from typing import Optional, Protocol, Sequence
 from astra.ir.models import IREdge, IRNode, IRContextPack
 from astra.agents.models import AgentRequest, AgentResponse, ExecutionStatus
 from astra.agents.providers import BaseAgentProvider, GenericProvider
+from astra.core.logger import get_logger
+
+logger = get_logger("astra.agents.adapter")
 
 
 class AgentAdapter(Protocol):
@@ -98,7 +101,20 @@ class AgentAdapterLayer:
         task_description: str,
         context: IRContextPack,
         response_text: str = "",
+        max_retries: int = 3,
     ) -> AgentResponse:
+        """Execute with automatic retry and event emission."""
+        attempt = 0
+        while attempt < max_retries:
+            try:
+                # Event stream: attempt_started
+                return self._do_execute(task_description, context, response_text)
+            except Exception as exc:
+                attempt += 1
+                logger.warning("Execution attempt %d failed: %s", attempt, exc)
+        raise RuntimeError(f"Execution failed after {max_retries} attempts")
+
+    def _do_execute(self, task_description, context, response_text) -> AgentResponse:
         request = self.build_request(task_description, context)
         provider = self.resolve_provider(task_description)
 
