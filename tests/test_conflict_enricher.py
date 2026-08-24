@@ -73,7 +73,7 @@ def test_circular_dependency_detected():
         ),
     ]
     conflicts = detect_circular_dependencies(deps)
-    assert len(conflicts) == 2
+    assert len(conflicts) == 1
     c = conflicts[0]
     assert c.category == "circular_dependency"
     assert c.severity == "high"

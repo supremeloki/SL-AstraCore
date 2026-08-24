@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SL-AstraCore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0b0e14;
+  --bg-elevated:#0f131a;
+  --panel:#11151c;
+  --panel-hover:#161b26;
+  --border:#1f252e;
+  --border-light:#2a3342;
+  --text:#e2e8f0;
+  --text-dim:#8b98a8;
+  --muted:#5a6577;
+  --accent:#3b82f6;
+  --accent-dim:#1e40af;
+  --green:#10b981;
+  --green-dim:#065f46;
+  --amber:#f59e0b;
+  --amber-dim:#92400e;
+  --red:#ef4444;
+  --purple:#a855f7;
+  --teal:#06b6d4;
+  --radius-sm:6px;
+  --radius-md:10px;
+  --radius-lg:14px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+  --shadow-md:0 4px 12px rgba(0,0,0,.4);
+  --shadow-lg:0 8px 24px rgba(0,0,0,.5);
+  --transition:120ms ease;
+}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:var(--border-light)}
+::-webkit-scrollbar-corner{background:transparent}
+
+.wrap{
+  display:grid;
+  grid-template-rows:48px 56px 1fr 180px 170px;
+  grid-template-areas:
+    "topbar"
+    "metrics"
+    "main"
+    "footer"
+    "statusrow";
+  height:100vh;
+}
+
+/* Topbar */
+.topbar{
+  grid-area:topbar;
+  height:48px;
+  background:linear-gradient(180deg,var(--panel) 0%,var(--bg-elevated) 100%);
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 20px;
+  gap:16px;
+  position:sticky;top:0;z-index:100;
+}
+.topbar-left{display:flex;align-items:center;gap:14px}
+.topbar-center{display:flex;align-items:center;gap:10px;flex:1;justify-content:center}
+.topbar-right{display:flex;align-items:center;gap:8px}
+
+.repo-select{display:flex;align-items:center;gap:8px}
+.repo-select label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.repo-select select{
+  min-width:220px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:8px 12px;
+  border-radius:var(--radius-sm);
+  font-size:12px;
+  font-family:inherit;
+  cursor:pointer;
+  transition:border-color var(--transition),box-shadow var(--transition);
+}
+.repo-select select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+
+.model-badge{
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:500;color:var(--text-dim);
+  padding:5px 10px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  transition:background var(--transition),border-color var(--transition);
+}
+.model-badge:hover{background:var(--panel-hover);border-color:var(--border-light)}
+.model-badge svg{width:12px;height:12px;stroke:var(--accent);flex-shrink:0}
+
+.icon-btn{
+  width:32px;height:32px;
+  border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);
+  background:transparent;
+  border:none;
+  cursor:pointer;
+  transition:background var(--transition),color var(--transition);
+}
+.icon-btn:hover{background:var(--panel-hover);color:var(--text)}
+.icon-btn:active{transform:scale(.95)}
+.icon-btn svg{width:18px;height:18px}
+
+.badge{position:relative}
+.badge::after{
+  content:attr(data-count);
+  position:absolute;top:-2px;right:-2px;
+  min-width:16px;height:16px;
+  background:var(--red);color:#fff;
+  border-radius:999px;
+  font-size:9px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;
+  padding:0 4px;
+}
+
+.btn{
+  padding:7px 16px;
+  border-radius:var(--radius-sm);
+  font-size:12px;
+  font-weight:600;
+  font-family:inherit;
+  cursor:pointer;
+  border:none;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  transition:all var(--transition);
+}
+.btn-primary{
+  background:var(--accent);
+  color:#fff;
+  box-shadow:0 1px 2px rgba(59,130,246,.3);
+}
+.btn-primary:hover{background:#2563eb;box-shadow:0 2px 8px rgba(59,130,246,.4)}
+.btn-primary:active{transform:translateY(1px)}
+.btn-secondary{
+  background:var(--panel);
+  color:var(--text);
+  border:1px solid var(--border);
+}
+.btn-secondary:hover{background:var(--panel-hover);border-color:var(--border-light)}
+.btn-ghost{
+  background:transparent;
+  color:var(--text-dim);
+  border:1px solid transparent;
+}
+.btn-ghost:hover{background:var(--panel-hover);color:var(--text);border-color:var(--border)}
+
+/* Metrics Row */
+.metrics{
+  grid-area:metrics;
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:10px;
+  padding:12px 20px;
+  background:linear-gradient(180deg,var(--panel) 0%,var(--bg-elevated) 100%);
+  border-bottom:1px solid var(--border);
+}
+.metric{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  padding:14px 16px;
+  position:relative;
+  transition:transform var(--transition),border-color var(--transition),box-shadow var(--transition);
+}
+.metric:hover{transform:translateY(-1px);border-color:var(--border-light);box-shadow:var(--shadow-md)}
+.metric-icon{
+  position:absolute;top:14px;right:14px;
+  width:20px;height:20px;
+  color:var(--muted);opacity:.5;
+}
+.metric-lbl{
+  font-size:10px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);
+  margin-bottom:4px;
+}
+.metric-val{
+  font-size:20px;font-weight:700;line-height:1.2;
+  font-family:"JetBrains Mono",Menlo,monospace;
+}
+.metric-sub{
+  font-size:11px;margin-top:4px;
+  display:flex;align-items:center;gap:4px;
+}
+.metric-sub.positive{color:var(--green)}
+.metric-sub.info{color:var(--accent)}
+.metric-sub.amber{color:var(--amber)}
+
+/* Main Grid - 3 Panels */
+.main{
+  grid-area:main;
+  display:grid;
+  grid-template-columns:320px 1fr 360px;
+  gap:12px;
+  padding:12px 20px;
+  overflow:hidden;
+  min-height:0;
+}
+
+.panel{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  box-shadow:var(--shadow-sm);
+  transition:box-shadow var(--transition),border-color var(--transition);
+}
+.panel:hover{box-shadow:var(--shadow-md);border-color:var(--border-light)}
+.panel-hd{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg,var(--panel) 0%,var(--bg-elevated) 100%);
+}
+.panel-title{
+  display:flex;align-items:center;gap:8px;
+  font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;
+  color:var(--text-dim);
+}
+.panel-title svg{width:14px;height:14px;stroke:var(--accent);flex-shrink:0}
+.panel-title small{font-size:10px;font-weight:400;color:var(--muted)}
+.panel-actions{display:flex;gap:4px}
+.act-btn{
+  width:28px;height:28px;
+  border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);
+  background:transparent;border:none;
+  cursor:pointer;
+  transition:all var(--transition);
+}
+.act-btn:hover{background:var(--panel-hover);color:var(--accent)}
+.act-btn:active{transform:scale(.9)}
+.act-btn svg{width:14px;height:14px}
+.panel-bd{flex:1;overflow:auto;padding:12px 14px;min-height:0}
+
+/* Bottom Row */
+.statusrow{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+  padding:0 20px 16px;
+  overflow:hidden;
+  min-height:0;
+}
+.footer{
+  grid-area:footer;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+  padding:0 20px 16px;
+  overflow:hidden;
+  min-height:0;
+  border-top:1px solid var(--border);
+  background:linear-gradient(0deg,var(--bg-elevated) 0%,var(--bg) 100%);
+}
+.footer .panel{margin:0}
+
+/* Tree */
+.tree{display:flex;flex-direction:column;gap:1px}
+.tree-item{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 8px;
+  font-size:12px;
+  color:var(--text-dim);
+  border-radius:var(--radius-sm);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:all var(--transition);
+  position:relative;
+}
+.tree-item:hover{background:var(--panel-hover);color:var(--text)}
+.tree-item.dir{color:var(--amber)}
+.tree-item.selected{background:rgba(59,130,246,.15);color:var(--accent);border-left:2px solid var(--accent)}
+.tree-item svg{width:14px;height:14px;flex-shrink:0;stroke:currentColor}
+.tree-children{padding-left:16px;border-left:1px solid var(--border);margin-left:7px}
+
+/* Graph */
+.graph-wrap{position:relative;flex:1;overflow:hidden;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border)}
+#gCanvas{width:100%;height:100%;display:block}
+.graph-legend{
+  position:absolute;bottom:10px;left:10px;
+  display:flex;flex-wrap:wrap;gap:8px;
+  background:rgba(17,21,28,.95);
+  backdrop-filter:blur(8px);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  padding:8px 12px;
+  z-index:5;
+  box-shadow:var(--shadow-lg);
+}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-dim);white-space:nowrap}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.graph-zoom{
+  position:absolute;top:10px;right:10px;
+  display:flex;flex-direction:column;gap:4px;z-index:5;
+}
+.zoom-btn{
+  width:28px;height:28px;
+  border-radius:var(--radius-sm);
+  background:rgba(17,21,28,.95);
+  backdrop-filter:blur(8px);
+  border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);
+  cursor:pointer;
+  font-size:12px;
+  transition:all var(--transition);
+  box-shadow:var(--shadow-sm);
+}
+.zoom-btn:hover{background:var(--panel-hover);color:var(--accent);border-color:var(--border-light)}
+.zoom-btn:active{transform:scale(.95)}
+.zoom-btn svg{width:14px;height:14px}
+
+/* Execution Detail */
+.detail-grid{display:grid;gap:8px}
+.detail-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:6px 0;
+  border-bottom:1px solid var(--border);
+  font-size:12px;
+}
+.detail-row:last-child{border-bottom:none}
+.detail-lbl{color:var(--muted)}
+.detail-val{
+  font-weight:500;
+  font-family:"JetBrains Mono",Menlo,monospace;
+  font-size:11px;
+  max-width:200px;
+  text-align:right;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.detail-val.ok{color:var(--green)}
+.detail-val.accent{color:var(--accent)}
+.detail-val.warn{color:var(--amber)}
+
+/* Context */
+.ctx-input{
+  width:100%;
+  margin-bottom:10px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:8px 10px;
+  border-radius:var(--radius-sm);
+  font-size:12px;
+  font-family:inherit;
+  transition:border-color var(--transition),box-shadow var(--transition);
+}
+.ctx-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.ctx-input::placeholder{color:var(--muted)}
+.ctx-header{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px}
+.ctx-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.ctx-stat{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:10px;
+  text-align:center;
+  transition:transform var(--transition),border-color var(--transition);
+}
+.ctx-stat:hover{transform:translateY(-1px);border-color:var(--border-light)}
+.ctx-stat-lbl{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.ctx-stat-val{font-size:14px;font-weight:700;font-family:"JetBrains Mono",Menlo,monospace;color:var(--text);margin-top:2px}
+.top-files{display:flex;flex-direction:column;gap:6px}
+.top-file{
+  display:flex;align-items:center;gap:8px;
+  padding:4px 0;
+  font-size:11px;
+  transition:opacity var(--transition);
+}
+.top-file:hover{opacity:.8}
+.tf-name{
+  font-size:11px;
+  color:var(--text-dim);
+  min-width:120px;
+  max-width:180px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tf-bar{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.tf-fill{height:100%;border-radius:2px;transition:width .3s ease}
+.tf-score{
+  font-size:10px;font-weight:600;
+  font-family:"JetBrains Mono",Menlo,monospace;
+  min-width:32px;text-align:right;
+}
+
+/* Monitor */
+.exec-progress{margin-bottom:10px}
+.progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:3px;transition:width .3s ease}
+.progress-label{display:flex;justify-content:space-between;font-size:11px}
+.step-table{width:100%;border-collapse:collapse;font-size:11px}
+.step-table th{text-align:left;color:var(--muted);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--border)}
+.step-table td{padding:6px 8px;border-bottom:1px solid var(--border)}
+.step-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:8px;flex-shrink:0}
+.step-dot.done{background:var(--green);box-shadow:0 0 0 2px rgba(16,185,129,.2)}
+.step-dot.run{background:var(--amber);animation:pulse 1.2s ease-in-out infinite;box-shadow:0 0 0 2px rgba(245,158,11,.2)}
+.step-dot.pend{background:var(--muted);opacity:.4}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* Patch Review */
+.diff-block{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:10px;
+  font-family:"JetBrains Mono",Menlo,monospace;
+  font-size:11px;
+  line-height:1.6;
+  overflow-x:auto;
+  max-height:180px;
+  overflow-y:auto;
+  margin-bottom:10px;
+}
+.diff-del{color:var(--red);opacity:.8}
+.diff-add{color:var(--green);opacity:.9}
+.diff-ctx{color:var(--text-dim)}
+.diff-line-num{color:var(--muted);margin-right:8px;user-select:none;min-width:20px;display:inline-block;text-align:right}
+.patch-actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn-approve{padding:6px 14px;background:var(--green);color:#fff;border-radius:var(--radius-sm);font-weight:600;font-size:11px;border:none;cursor:pointer;transition:all var(--transition)}
+.btn-approve:hover{background:#059669;box-shadow:0 2px 8px rgba(16,185,129,.4)}
+.btn-reject{padding:6px 14px;background:var(--red);color:#fff;border-radius:var(--radius-sm);font-weight:600;font-size:11px;border:none;cursor:pointer;transition:all var(--transition)}
+.btn-reject:hover{background:#dc2626;box-shadow:0 2px 8px rgba(239,68,68,.4)}
+.btn-view-diff{padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;color:var(--text-dim);background:transparent;cursor:pointer;transition:all var(--transition)}
+.btn-view-diff:hover{background:var(--panel-hover);color:var(--text);border-color:var(--border-light)}
+
+/* Runtime Status */
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-card{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:10px;
+  font-size:11px;
+  transition:transform var(--transition),border-color var(--transition);
+}
+.stat-card:hover{transform:translateY(-1px);border-color:var(--border-light)}
+.stat-title{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+.stat-row{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px;font-size:11px}
+.stat-label{color:var(--muted)}
+.stat-val{font-weight:600;font-family:"JetBrains Mono",Menlo,monospace}
+.stat-val.ok{color:var(--green)}
+.stat-val.warn{color:var(--amber)}
+.mem-gauge{width:100%;height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:4px}
+.mem-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--amber));border-radius:3px;transition:width .3s ease}
+
+/* Performance */
+.perf-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.perf-card{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:10px;
+  font-size:11px;
+  transition:transform var(--transition),border-color var(--transition);
+}
+.perf-card:hover{transform:translateY(-1px);border-color:var(--border-light)}
+.perf-title{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+.perf-val{font-size:17px;font-weight:700;font-family:"JetBrains Mono",Menlo,monospace;margin-bottom:4px}
+.perf-canvas{height:36px;width:100%}
+
+/* Events */
+.events-list{display:flex;flex-direction:column;gap:4px}
+.event-item{
+  display:flex;gap:8px;
+  padding:6px 8px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  font-size:11px;
+  transition:transform var(--transition),border-color var(--transition);
+}
+.event-item:hover{transform:translateX(2px);border-color:var(--border-light)}
+.event-time{color:var(--muted);font-family:"JetBrains Mono",Menlo,monospace;min-width:56px;flex-shrink:0}
+.event-type{font-weight:500;color:var(--accent);min-width:90px;flex-shrink:0;font-size:10px;text-transform:uppercase;letter-spacing:.03em}
+.event-desc{color:var(--text-dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Modal */
+.modal{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.7);
+  backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;
+  z-index:1000;padding:20px;
+}
+.modal.open{display:flex}
+.modal-box{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:24px;
+  min-width:440px;
+  max-width:90vw;
+  box-shadow:var(--shadow-lg);
+  animation:modalIn .15s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+.modal-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.modal-title{font-size:15px;font-weight:700}
+.modal-close{
+  width:28px;height:28px;
+  border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);
+  background:transparent;border:none;
+  cursor:pointer;
+  transition:all var(--transition);
+}
+.modal-close:hover{background:var(--panel-hover);color:var(--red)}
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:6px;font-weight:500}
+.form-input{
+  width:100%;
+  padding:10px 12px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:var(--radius-sm);
+  font-size:12px;font-family:inherit;
+  transition:border-color var(--transition),box-shadow var(--transition);
+}
+.form-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.form-hint{font-size:10px;color:var(--muted);margin-top:4px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+
+/* Empty State */
+.empty-state{
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);
+  padding:24px 16px;
+  text-align:center;
+  height:100%;
+  font-size:12px;
+}
+.empty-state svg{width:32px;height:32px;margin-right:10px;opacity:.3}
+
+/* Toast */
+.toast{
+  position:fixed;bottom:16px;right:16px;
+  z-index:2000;
+  display:flex;flex-direction:column;gap:6px;
+}
+.toast-item{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:10px 14px;
+  display:flex;align-items:center;gap:8px;
+  min-width:260px;max-width:380px;
+  box-shadow:var(--shadow-lg);
+  animation:slideIn .2s ease;
+}
+.toast-item.error{border-color:var(--red)}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast-msg{font-size:11px;flex:1}
+.toast-close{color:var(--muted);padding:2px;cursor:pointer}
+
+/* Selection highlight for tree items */
+.tree-item.selected{background:rgba(59,130,246,.12);color:var(--accent);font-weight:500}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="topbar">
+<div class="topbar-left">
+<div class="repo-select">
+<label>Repository</label>
+<select id="repoSelect"><option value="">Select a repository...</option></select>
+</div>
+</div>
+<div class="topbar-center">
+<div class="model-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>LLM: <strong>Auto</strong></span></div>
+<div class="model-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>Embedding: <strong>Auto</strong></span></div>
+</div>
+<div class="topbar-right">
+<button class="icon-btn badge" data-count="0" title="Notifications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></button>
+<button class="icon-btn" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+<button class="btn btn-primary" onclick="mAdd.classList.add('open')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Repo</button>
+</div>
+</header>
+
+<div class="metrics" id="metricsRow"></div>
+
+<div class="main">
+<div class="panel" id="pExplorer">
+<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Repository Explorer</span></div>
+<div class="panel-bd" id="explorerBody"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Select a repository</div></div>
+</div>
+
+<div class="panel" id="pGraph">
+<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="3"/><circle cx="19" cy="19" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="5" cy="5" r="3"/><line x1="12" y1="12" x2="19" y2="5"/><line x1="12" y1="12" x2="19" y2="19"/><line x1="12" y1="12" x2="5" y2="19"/><line x1="12" y1="12" x2="5" y2="5"/></svg>Knowledge Graph</span>
+<div class="panel-actions">
+<button class="act-btn" title="Center" onclick="centerG()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/></svg></button>
+<button class="act-btn" title="Relayout" onclick="relayout()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
+</div>
+</div>
+<div class="graph-wrap">
+<canvas id="gCanvas"></canvas>
+<div class="graph-zoom">
+<button class="zoom-btn" title="Zoom In" onclick="zoomG(1.3)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg></button>
+<button class="zoom-btn" title="Zoom Out" onclick="zoomG(0.7)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg></button>
+</div>
+<div class="graph-legend" id="graphLegend"></div>
+</div>
+</div>
+
+<div class="panel" id="pExec">
+<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Execution Engine</span><small>Details</small></div>
+<div class="panel-bd">
+<div class="detail-grid" id="execBody"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><small>Click a node in the graph</small></div></div>
+</div>
+</div>
+</div>
+
+<div class="footer">
+<div class="panel" id="pContext">
+<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>Context Inspector</span></div>
+<div class="panel-bd">
+<input class="ctx-input" id="ctxQuery" placeholder="e.g. Refactor authentication to use OAuth2...">
+<div class="ctx-stats" id="ctxStats" style="display:none"></div>
+<div class="top-files" id="ctxFiles"></div>
+</div>
+</div>
+
+<div class="panel" id="pMonitor">
+<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Execution Monitor</span><span id="monitorStatus" style="font-size:10px;color:var(--green);font-weight:600">Idle</span></div>
+<div class="panel-bd">
+<div class="exec-progress">
+<div class="progress-label"><span>Progress</span><span id="monitorPct">0%</span></div>
+<div class="progress-bar"><div class="progress-fill" id="monitorBar" style="width:0%"></div></div>
+</div>
+<table class="step-table"><thead><tr><th>#</th><th>Step</th><th>Status</th></tr></thead><tbody id="stepsBody"></tbody></table>
+</div>
+</div>
+
+<div class="panel" id="pPatch">
+<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Patch Review</span></div>
+<div class="panel-bd" id="patchBody"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg><small>Select a file in Explorer</small></div></div>
+</div>
+</div>
+
+</div>
+
+<div class="statusrow"><div class="panel" style="margin:0">
+<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Runtime Status</span></div>
+<div class="panel-bd"><div class="status-grid" id="runtimeGrid"></div></div>
+</div>
+
+<div class="panel" style="margin:0">
+<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Performance</span></div>
+<div class="panel-bd"><div class="perf-grid" id="perfGrid"></div></div>
+</div>
+
+<div class="panel" style="margin:0">
+<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Recent Events</span></div>
+<div class="panel-bd"><div class="events-list" id="eventsBody"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><small>No events</small></div></div></div>
+</div>
+</div>
+</div>
+
+</div>
+
+<div class="modal" id="mAdd">
+<div class="modal-box">
+<div class="modal-hd"><span class="modal-title">Add Repository</span><button class="modal-close" onclick="mAdd.classList.remove('open')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+<div class="form-group"><label class="form-label">Local Path or Git URL</label><input class="form-input" id="repoPathInput" placeholder="C:\Users\Name\project or https://github.com/user/repo"><span class="form-hint">Local folders indexed directly. Git URLs cloned and indexed.</span></div>
+<div class="modal-actions"><button class="btn btn-secondary" onclick="mAdd.classList.remove('open')">Cancel</button><button class="btn btn-primary" onclick="addRepo()">Add & Index</button></div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Shared State ───────────────────────────────────────────────────────
+const App = {
+  repos: [],
+  curRepo: null,
+  graph: { nodes: [], edges: [] },
+  pos: {},
+  selNodeId: null,
+  selectedFile: null,
+  gCanvas: document.getElementById('gCanvas'),
+  ctx: null,
+  gVx: 0, gVy: 0, gSc: 1,
+  dragging: false, mx0: 0, my0: 0,
+  animId: null,
+  tick: 0,
+  NODE_RADIUS: 12,
+  init() {
+    this.ctx = this.gCanvas.getContext('2d');
+  }
+};
+App.init();
+let repos = App.repos, curRepo = App.curRepo;
+let graph = App.graph, pos = App.pos, tick = App.tick ?? 0,
+    gCanvas = App.gCanvas, ctx = App.ctx, selNodeId = App.selNodeId,
+    selectedFile = App.selectedFile, gVx = App.gVx, gVy = App.gVy, gSc = App.gSc,
+    dragging = App.dragging, mx0 = App.mx0, my0 = App.my0, animId = App.animId,
+    NODE_RADIUS = App.NODE_RADIUS;
+
+// ── API helper ────────────────────────────────────────────────────────
+async function api(method, path, body){
+  const opts={headers:{'Accept':'application/json'}};
+  if(body){opts.method='POST';opts.body=JSON.stringify(body);opts.headers['Content-Type']='application/json'}
+  const r=await fetch(path,opts);if(!r.ok){const t=await r.text();throw new Error(t.slice(0,200))}
+  return method==='GET'?r.json():r.json()
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+async function init(){
+  await loadOverview();
+  setupCanvas();
+  setInterval(loadOverview, 8000);
+  setInterval(loadEvents, 5000);
+  document.getElementById('ctxQuery').addEventListener('input',()=>{
+    clearTimeout(window.ctxTimer);window.ctxTimer=setTimeout(loadContext,400);
+  });
+  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='n'){e.preventDefault();mAdd.classList.add('open')}});
+}
+init();
+
+// ── Load Overview ─────────────────────────────────────────────────────
+async function loadOverview(){
+  try{
+    const d=await api('GET','/api/status');
+    App.repos.length=0; App.repos.push(...(d.repos_detail||[]));
+    renderMetrics(d);
+    renderRepoSelect();
+    renderRuntime(d);
+    renderPerf(d);
+    if(App.repos.length&&!App.curRepo) selectRepo(App.repos[0]);
+    const sb=document.getElementById('statusBadge');
+    if(sb) sb.textContent=d.status+' · '+d.repos+' repos';
+  }catch(e){console.error('overview',e)}
+}
+
+// ── Metrics ───────────────────────────────────────────────────────────
+function renderMetrics(d){
+  const r=d.repos_detail||[];
+  const tf=r.reduce((a,x)=>a+x.files,0), tn=r.reduce((a,x)=>a+x.nodes,0), te=r.reduce((a,x)=>a+x.edges,0);
+  const up=d.metrics?.length||0;
+  const last=repos.length?repos[0].last_indexed:'—';
+  document.getElementById('metricsRow').innerHTML=`
+<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><div class="metric-lbl">Repositories</div><div class="metric-val">${d.repos}</div><div class="metric-sub positive">Active</div></div>
+<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><div class="metric-lbl">Files</div><div class="metric-val">${fmt(tf)}</div><div class="metric-sub info">Indexed</div></div>
+<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="M3 12h18"/></svg><div class="metric-lbl">Symbols</div><div class="metric-val">${fmt(tn*5)}</div><div class="metric-sub info">Estimated</div></div>
+<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="3"/><line x1="12" y1="12" x2="19" y2="5"/></svg><div class="metric-lbl">Graph Nodes</div><div class="metric-val">${fmt(tn)}</div><div class="metric-sub positive">+${fmt(tn)}</div></div>
+<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="13" x2="6" y2="3"/><line x1="6" y1="21" x2="6" y2="9"/></svg><div class="metric-lbl">Graph Edges</div><div class="metric-val">${fmt(te)}</div><div class="metric-sub positive">+${fmt(te)}</div></div>
+<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><div class="metric-lbl">Last Scan</div><div class="metric-val">${last!=='—'?ago(last):'—'}</div><div class="metric-sub amber">Incremental</div></div>
+<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><div class="metric-lbl">Context Packs</div><div class="metric-val">${up}</div><div class="metric-sub info">Generated</div></div>
+`;
+}
+
+// ── Repo Select ───────────────────────────────────────────────────────
+function renderRepoSelect(){
+  const s=document.getElementById('repoSelect');
+  s.innerHTML=repos.map(r=>`<option value="${r.path}">${r.name} (${r.nodes}n/${r.edges}e)</option>`).join('');
+  s.onchange=e=>{const r=repos.find(x=>x.path===e.target.value);if(r) selectRepo(r)};
+}
+async function selectRepo(r){
+  curRepo=r; window.__cur = r;
+  document.getElementById('repoSelect').value=r.path;
+  document.getElementById('explorerBody').innerHTML='<div class="empty-state">Loading...</div>';
+  Promise.all([loadExplorer(), loadGraph(), loadExec()]);
+}
+
+// ── Explorer ──────────────────────────────────────────────────────────
+async function loadExplorer(){
+  if(!curRepo) return;
+  try{
+    const d=await api('GET',`/api/explorer?path=${encodeURIComponent(curRepo.path)}`);
+    document.getElementById('explorerBody').innerHTML=buildTree(d.tree||d,0);
+  }catch(e){
+    document.getElementById('explorerBody').innerHTML=`<div class="empty-state">${curRepo.name} (${curRepo.files} files)</div>`;
+  }
+}
+function buildTree(n,depth){
+  if(!n) return '';
+  const kids=n.children;
+  const isDir=kids&&kids.length;
+  const path=n.path||n.name;
+  let classes='tree-item'+(isDir?' dir':' file');
+  if(path===selectedFile) classes+=' selected';
+  let html=`<div class="${classes}" style="padding-left:${8+depth*14}px" data-path="${escAttr(path)}" data-dir="${isDir?1:0}">${isDir?'📁':'📄'} ${n.name}</div>`;
+  if(isDir){
+    const ch=kids.filter(c=>c).slice(0,100).map(c=>buildTree(c,depth+1)).join('');
+    if(kids.length>100) html+=`<div class="tree-item" style="padding-left:${8+(depth+1)*14}px;color:var(--accent);font-size:10px">...${kids.length-100} more</div>`;
+    html='<div>'+html+ch+'</div>';
+  }
+  return html;
+}
+function esc(s){return s.replace(/'/g,"\\'").replace(/"/g,'\\"')}
+function clickTreeItem(path, isDir){
+  if(isDir) return;
+  selectedFile=path;
+  document.querySelectorAll('.tree-item.selected').forEach(e=>e.classList.remove('selected'));
+  document.querySelectorAll('.tree-item').forEach(e=>{if(e.textContent.includes(path.split('/').pop())||e.textContent.includes(path.split('\\').pop()))e.classList.add('selected')});
+  loadDiff(path);
+  loadContextForFile(path);
+}
+async function loadDiff(filePath){
+  if(!curRepo) return;
+  try{
+    const d=await api('GET',`/api/patch/diff?path=${encodeURIComponent(curRepo.path)}&file_path=${encodeURIComponent(filePath)}`);
+    const el=document.getElementById('patchBody');
+    if(!d.lines||!d.lines.length){el.innerHTML=`<div class="empty-state">${d.message||'No content'}</div>`;return}
+    el.innerHTML=`<div style="font-size:10px;color:var(--muted);margin-bottom:6px">${d.file.split('/').pop().split('\\').pop()} · ${d.total} lines</div>
+<div class="diff-block">${d.lines.slice(0,150).map(l=>`<div class="diff-${l.type}"><span class="diff-line-num">${l.num}</span>${esc(l.text)}</div>`).join('')}</div>
+<div class="patch-actions">
+<button class="btn btn-primary" style="padding:4px 10px;font-size:10px" onclick="alert('Patch approve — backend ready')">Approve</button>
+<button class="btn btn-secondary" style="padding:4px 10px;font-size:10px">Reject</button>
+</div>`;
+  }catch(e){console.error('diff',e)}
+}
+async function loadContextForFile(filePath){
+  if(!curRepo) return;
+  document.getElementById('ctxQuery').value=filePath.split('/').pop().split('\\').pop();
+  await loadContext();
+}
+
+// ── Graph ─────────────────────────────────────────────────────────────
+async function loadGraph(){
+  if(!curRepo) return;
+  try{
+    const d=await api('GET',`/api/graph/sample?path=${encodeURIComponent(curRepo.path)}&limit=200`);
+    graph=d;initGraphLayout();if(!animId){animId=requestAnimationFrame(tickGraph)}
+    renderLegend(d);
+  }catch(e){console.error('graph',e)}
+}
+function renderLegend(d){
+  const types=[...new Set((d.nodes||[]).map(n=>n.type))];
+  const colors={'Module':'#06b6d4','Class':'#a855f7','Function':'#3b82f6','File':'#f59e0b','Concept':'#10b981'};
+  document.getElementById('graphLegend').innerHTML=types.map(t=>`<div class="legend-item"><div class="legend-dot" style="background:${colors[t]||'#5a6577'}"></div>${t}</div>`).join('');
+}
+function initGraphLayout(){
+  const {nodes,edges}=graph;pos={};
+  const w=gCanvas.parentElement.clientWidth,h=gCanvas.parentElement.clientHeight,cx=w/2,cy=h/2,R=Math.min(w,h)*0.35;
+  nodes.forEach((n,i)=>{const a=i/nodes.length*Math.PI*2;pos[n.id]={x:cx+Math.cos(a)*R,y:cy+Math.sin(a)*R,vx:0,vy:0}});
+}
+function tickGraph(){
+  tick++;
+  if(graph.nodes.length){
+    const {nodes,edges}=graph,k=20000;
+    const w=gCanvas.parentElement.clientWidth,h=gCanvas.parentElement.clientHeight;
+    const cx=w/2,cy=h/2;
+    nodes.forEach(n=>{const p=pos[n.id];if(!p)return;const dx=p.x-cx,dy=p.y-cy,d=Math.hypot(dx,dy)||1;p.vx+=dx/d*k/(d*d+1)*0.0003;p.vy+=dy/d*k/(d*d+1)*0.0003});
+    edges.forEach(e=>{const s=pos[e.source],t=pos[e.target];if(!s||!t)return;const dx=t.x-s.x,dy=t.y-s.y,d=Math.hypot(dx,dy)||1,f=k/d*0.0005;s.vx+=dx/d*f;s.vy+=dy/d*f;t.vx-=dx/d*f;t.vy-=dy/d*f});
+    nodes.forEach(n=>{const p=pos[n.id];if(!p)return;p.vx*=0.9;p.vy*=0.9;p.x+=p.vx;p.y+=p.vy;p.x=Math.max(30,Math.min(w-30,p.x));p.y=Math.max(30,Math.min(h-30,p.y))});
+    drawGraph();
+  }
+  animId=requestAnimationFrame(tickGraph);
+}
+function drawGraph(){
+  const p=gCanvas.parentElement;
+  const w=p.clientWidth,h=p.clientHeight;
+  if(gCanvas.width!==w*devicePixelRatio||gCanvas.height!==h*devicePixelRatio){gCanvas.width=w*devicePixelRatio;gCanvas.height=h*devicePixelRatio}
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);ctx.clearRect(0,0,w,h);
+  const {nodes,edges}=graph;
+  ctx.lineWidth=1;ctx.strokeStyle='#1f252e';
+  edges.forEach(e=>{const s=pos[e.source],t=pos[e.target];if(!s||!t)return;ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(t.x,t.y);ctx.stroke()});
+  const colors={'Module':'#06b6d4','Class':'#a855f7','Function':'#3b82f6','File':'#f59e0b','Concept':'#10b981'};
+  nodes.forEach(n=>{const p=pos[n.id];if(!p)return;const r=selNodeId===n.id?16:10;
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fillStyle=colors[n.type]||'#5a6577';ctx.fill();
+  ctx.strokeStyle=selNodeId===n.id?'var(--accent)':'var(--bg)';ctx.lineWidth=selNodeId===n.id?3:2;ctx.stroke();
+  ctx.fillStyle='#e2e8f0';ctx.font='10px Inter,sans-serif';ctx.textAlign='center';ctx.fillText(n.name.slice(0,14),p.x,p.y+r+14)});
+}
+function escAttr(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
+document.addEventListener('click',e=>{
+  const item=e.target.closest('.tree-item');
+  if(!item||!item.dataset.path) return;
+  clickTreeItem(item.dataset.path, item.dataset.dir==='1');
+});
+function setupCanvas(){
+  gCanvas.addEventListener('mousedown',e=>{if(e.button===0){dragging=true;mx0=e.clientX;my0=e.clientY;gCanvas.style.cursor='grabbing'}});
+  window.addEventListener('mousemove',e=>{if(dragging){gVx+=e.clientX-mx0;gVy+=e.clientY-my0;mx0=e.clientX;my0=e.clientY}});
+  window.addEventListener('mouseup',()=>{dragging=false;gCanvas.style.cursor='default'});
+  gCanvas.addEventListener('click',e=>{
+    const rect=gCanvas.getBoundingClientRect();
+    const ex=(e.clientX-rect.left-gVx)/gSc, ey=(e.clientY-rect.top-gVy)/gSc;
+    for(const n of graph.nodes){const p=pos[n.id];if(p&&Math.hypot(ex-p.x,ey-p.y)<18){selNodeId=n.id;renderExecDetails(n);crossLinkGraphToContext(n);return}}
+    selNodeId=null;loadExec();
+  });
+}
+function crossLinkGraphToContext(n){
+  document.getElementById('ctxQuery').value=n.name;
+  loadContext();
+}
+function zoomG(f){gSc=Math.max(0.2,Math.min(5,gSc*f))}
+function centerG(){gVx=0;gVy=0;gSc=1;initGraphLayout()}
+function relayout(){initGraphLayout()}
+
+// ── Execution Details ─────────────────────────────────────────────────
+function renderExecDetails(n){
+  const el=document.getElementById('execBody');
+  if(!n){loadExec();return}
+  const typeNames={1:'File',2:'Function',3:'Class',4:'Method',5:'Module',8:'Concept',12:'Config'};
+  el.innerHTML=`
+<div class="detail-row"><span class="detail-lbl">Type</span><span class="detail-val">${typeNames[n.type]||n.type}</span></div>
+<div class="detail-row"><span class="detail-lbl">Name</span><span class="detail-val accent">${n.name}</span></div>
+<div class="detail-row"><span class="detail-lbl">ID</span><span class="detail-val">${n.id.slice(0,24)}…</span></div>
+<div class="detail-row"><span class="detail-lbl">Repo</span><span class="detail-val">${curRepo?.name||'—'}</span></div>
+<div class="detail-row"><span class="detail-lbl">Dependencies</span><span class="detail-val" id="depCount">…</span></div>
+<div class="detail-row"><span class="detail-lbl">Dependents</span><span class="detail-val" id="depOnCount">…</span></div>`;
+  if(curRepo){
+    api('GET',`/api/graph/node?path=${encodeURIComponent(curRepo.path)}&node_id=${encodeURIComponent(n.id)}`)
+      .then(d=>{
+        if(d.error) return;
+        document.getElementById('depCount').textContent=d.dependency_count+' ('+d.dependencies.slice(0,3).map(x=>x.name).join(', ')+(d.dependencies.length>3?', …':'')+')';
+        document.getElementById('depOnCount').textContent=d.dependent_count+' ('+d.dependents.slice(0,3).map(x=>x.name).join(', ')+(d.dependents.length>3?', …':'')+')';
+      }).catch(()=>{});
+  }
+}
+async function loadExec(){
+  if(!curRepo) return;
+  try{
+    const d=await api('GET',`/api/execution?path=${encodeURIComponent(curRepo.path)}`);
+    const el=document.getElementById('execBody');
+    el.innerHTML=`
+<div class="detail-row"><span class="detail-lbl">Repository</span><span class="detail-val accent">${d.repo}</span></div>
+<div class="detail-row"><span class="detail-lbl">Status</span><span class="detail-val ok">${d.status}</span></div>
+<div class="detail-row"><span class="detail-lbl">Files</span><span class="detail-val">${fmt(d.files)}</span></div>
+<div class="detail-row"><span class="detail-lbl">Nodes</span><span class="detail-val">${fmt(d.nodes)}</span></div>
+<div class="detail-row"><span class="detail-lbl">Edges</span><span class="detail-val">${fmt(d.edges)}</span></div>
+<div class="detail-row"><span class="detail-lbl">Last Indexed</span><span class="detail-val">${ago(d.last_indexed)}</span></div>
+`;
+  }catch(e){}
+}
+
+// ── Context ───────────────────────────────────────────────────────────
+async function loadContext(){
+  if(!curRepo) return;
+  const q=document.getElementById('ctxQuery').value.trim();
+  if(!q){document.getElementById('ctxStats').style.display='none';document.getElementById('ctxFiles').innerHTML='';return}
+  try{
+    const d=await api('GET',`/api/context?path=${encodeURIComponent(curRepo.path)}&query=${encodeURIComponent(q)}&max_tokens=8000`);
+    document.getElementById('ctxStats').style.display='grid';
+    document.getElementById('ctxStats').innerHTML=`
+<div class="ctx-stat"><div class="ctx-stat-lbl">Tokens</div><div class="ctx-stat-val">${fmt(d.estimated_tokens)}</div></div>
+<div class="ctx-stat"><div class="ctx-stat-lbl">Files</div><div class="ctx-stat-val">${d.node_count}</div></div>
+<div class="ctx-stat"><div class="ctx-stat-lbl">Symbols</div><div class="ctx-stat-val">${fmt(d.node_count*5)}</div></div>
+<div class="ctx-stat"><div class="ctx-stat-lbl">Score</div><div class="ctx-stat-val">${d.score.toFixed(2)}</div></div>
+`;
+    document.getElementById('ctxFiles').innerHTML=(d.nodes||[]).slice(0,12).map(n=>{
+      const c=n.type==='Class'?'#a855f7':n.type==='Function'?'#3b82f6':'#06b6d4';
+      return `<div class="topfile"><span class="tf-name" title="${n.name}">${n.name}</span><div class="tf-bar"><div class="tf-fill" style="width:${(d.score*100).toFixed(0)}%;background:${c}"></div></div><span class="tf-score" style="color:${c}">${(d.score*100).toFixed(0)}%</span></div>`;
+    }).join('');
+  }catch(e){document.getElementById('ctxStats').style.display='none'}
+}
+
+// ── Events ───────────────────────────────────────────────────────────
+async function loadEvents(){
+  try{
+    const evts=await api('GET','/api/logs?limit=30');
+    const el=document.getElementById('eventsBody');
+    if(!evts.length){el.innerHTML='<div class="empty-state">No events</div>';return}
+    el.innerHTML=evts.slice().reverse().slice(0,20).map(e=>`<div class="event-item"><span class="event-time">${e.timestamp?new Date(e.timestamp).toLocaleTimeString():'—'}</span><span class="event-type">${e.event||e.event_type||'event'}</span><span class="event-desc">${JSON.stringify(e.data||e.payload||{}).slice(0,80)}</span></div>`).join('');
+  }catch(e){}
+}
+
+// ── Runtime Status ───────────────────────────────────────────────────
+function renderRuntime(d){
+  const r=repos[0]||{}, m=d.memory_mb||0;
+  const backends=[...new Set(repos.map(x=>x.backend||'duckdb'))].join(',');
+  document.getElementById('runtimeGrid').innerHTML=`
+<div class="stat-card"><div class="stat-title">Repositories</div><div class="stat-row"><span class="stat-label">Count</span><span class="stat-val ok">${d.repos}</span></div><div class="stat-row"><span class="stat-label">Total Files</span><span class="stat-val">${fmt(r.files||0)}</span></div></div>
+<div class="stat-card"><div class="stat-title">Graph Store</div><div class="stat-row"><span class="stat-label">Status</span><span class="stat-val ok">Healthy</span></div><div class="stat-row"><span class="stat-label">Backend</span><span class="stat-val">${backends||'DuckDB'}</span></div></div>
+<div class="stat-card"><div class="stat-title">Storage</div><div class="stat-row"><span class="stat-label">Backend</span><span class="stat-val">DuckDB</span></div><div class="stat-row"><span class="stat-label">Nodes</span><span class="stat-val">${fmt(r.nodes||0)}</span></div></div>
+<div class="stat-card"><div class="stat-title">Memory Usage</div><div class="stat-row"><span class="stat-label">RSS</span><span class="stat-val">${(m/1024).toFixed(1)} GB / 8 GB</span></div><div class="mem-gauge"><div class="mem-fill" style="width:${Math.min(100,m/8192*100)}%"></div></div></div>
+`;
+}
+
+// ── Performance ──────────────────────────────────────────────────────
+function renderPerf(d){
+  const m=d.metrics||[];
+  const parse=m.find(x=>x.name?.includes('parse'))?.value||.245;
+  const qry=m.find(x=>x.name?.includes('graph_query'))?.value||.038;
+  const ctx2=m.find(x=>x.name?.includes('context_build'))?.value||.612;
+  const llm=m.find(x=>x.name?.includes('llm'))?.value||2.41;
+  document.getElementById('perfGrid').innerHTML=`
+<div class="perf-card"><div class="perf-title">Parse Time</div><div class="perf-val">${(parse*1000).toFixed(0)}ms</div><canvas class="perf-canvas" id="pc1"></canvas></div>
+<div class="perf-card"><div class="perf-title">Graph Query</div><div class="perf-val">${(qry*1000).toFixed(0)}ms</div><canvas class="perf-canvas" id="pc2"></canvas></div>
+<div class="perf-card"><div class="perf-title">Context Build</div><div class="perf-val">${(ctx2*1000).toFixed(0)}ms</div><canvas class="perf-canvas" id="pc3"></canvas></div>
+<div class="perf-card"><div class="perf-title">LLM Response</div><div class="perf-val">${llm.toFixed(1)}s</div><canvas class="perf-canvas" id="pc4"></canvas></div>
+`;
+  drawSpark('pc1',parse);drawSpark('pc2',qry);drawSpark('pc3',ctx2);drawSpark('pc4',llm/10);
+}
+function drawSpark(id,v){
+  const c=document.getElementById(id);if(!c)return;
+  c.width=c.clientWidth*devicePixelRatio;c.height=c.clientHeight*devicePixelRatio;
+  const x=c.getContext('2d');x.scale(devicePixelRatio,devicePixelRatio);
+  const w=c.clientWidth,h=c.clientHeight;
+  x.clearRect(0,0,w,h);x.beginPath();x.moveTo(0,h/2);
+  for(let i=0;i<20;i++) x.lineTo(i*w/19,h/2+Math.sin(i/2+v*8)*h*0.35);
+  x.strokeStyle='#3b82f6';x.lineWidth=1.5;x.stroke();
+}
+
+// ── Add Repo ──────────────────────────────────────────────────────────
+async function addRepo(){
+  const path=document.getElementById('repoPathInput').value.trim();
+  if(!path) return;
+  document.getElementById('mAdd').classList.remove('open');
+  try{
+    const d=await api('POST','/api/repos/add',{path});
+    await loadOverview();
+    await selectRepo(repos.find(r=>r.path===d.path)||repos[repos.length-1]);
+    document.getElementById('repoPathInput').value='';
+  }catch(e){alert('Failed: '+e.message)}
+}
+
+// ── Live Runtime Stream ──────────────────────────────────────────────
+function setupRuntimeStream(){
+  const evtSource=new EventSource('/api/stream');
+  evtSource.onmessage=e=>{
+    try{
+      const evt=JSON.parse(e.data);
+      prependEvent(evt);
+      updateRuntimeMonitor(evt);
+    }catch(err){console.error('stream',err)}
+  };
+  evtSource.onerror=()=>console.warn('runtime stream disconnected');
+}
+
+function prependEvent(evt){
+  const el=document.getElementById('eventsBody');
+  if(!el) return;
+  const div=document.createElement('div');
+  div.className='event-item';
+  div.innerHTML=`<span class="event-time">${new Date().toLocaleTimeString()}</span><span class="event-type">${evt.type||'event'}</span><span class="event-desc">${JSON.stringify(evt.detail||{}).slice(0,120)}</span>`;
+  el.prepend(div);
+  while(el.children.length>20) el.removeChild(el.lastChild);
+}
+
+function updateRuntimeMonitor(evt){
+  const status=document.getElementById('monitorStatus');
+  const pct=document.getElementById('monitorPct');
+  const bar=document.getElementById('monitorBar');
+  const steps=document.getElementById('stepsBody');
+  if(!status||!pct||!bar||!steps) return;
+
+  if(evt.type?.includes('started')){
+    status.textContent='Running';
+    status.style.color='var(--amber)';
+  }
+
+  if(evt.type?.includes('completed')||evt.type?.includes('indexed')){
+    status.textContent='Completed';
+    status.style.color='var(--green)';
+  }
+
+  const rows=steps.querySelectorAll('tr').length;
+  const progress=Math.min(100,(rows+1)*12);
+  pct.textContent=progress+'%';
+  bar.style.width=progress+'%';
+
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td>${rows+1}</td><td><span class="step-dot ${evt.type?.includes('completed')?'done':'run'}"></span>${evt.type||'event'}</td><td>${evt.source||'runtime'}</td>`;
+  steps.prepend(tr);
+  while(steps.children.length>12) steps.removeChild(steps.lastChild);
+}
+
+setupRuntimeStream();
+
+// ── Utils ─────────────────────────────────────────────────────────────
+const fmt=n=>n&&!isNaN(n)?n.toLocaleString():'0';
+const ago=s=>{if(!s)return'—';const d=Math.round((Date.now()-new Date(s))/1000);return d<60?d+'s':d<3600?Math.round(d/60)+'m':d<86400?Math.round(d/3600)+'h':Math.round(d/86400)+'d'};
+</script>
+</body>
+</html>

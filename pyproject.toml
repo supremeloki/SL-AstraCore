@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "astra"
+version = "0.1.0"
+description = "SL-AstraCore: Repository Cognitive Intelligence Platform"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["astra*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

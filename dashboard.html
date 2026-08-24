@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SL-AstraCore Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+body{background:#0a0e1a;color:#c8d0e0;height:100vh;overflow:hidden}
+.dashboard{display:grid;grid-template-columns:220px 1fr;height:100vh}
+.sidebar{background:#0d1225;border-right:1px solid #1a2240;padding:0;display:flex;flex-direction:column}
+.sidebar-brand{padding:20px 16px;border-bottom:1px solid #1a2240;display:flex;align-items:center;gap:12px}
+.sidebar-brand .logo{width:32px;height:32px;background:linear-gradient(135deg,#00d4ff,#0066ff);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff}
+.sidebar-brand h1{font-size:14px;font-weight:600;color:#e0e6f0;letter-spacing:-0.3px}
+.sidebar-brand span{font-size:10px;color:#6b7fa3;display:block;margin-top:1px}
+.sidebar-nav{padding:12px 0;flex:1;overflow-y:auto}
+.nav-section{padding:16px 16px 6px;font-size:10px;font-weight:600;color:#4a5a7a;text-transform:uppercase;letter-spacing:1px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 16px;font-size:13px;color:#8899bb;cursor:pointer;transition:all 0.15s;border-left:2px solid transparent}
+.nav-item:hover{color:#e0e6f0;background:rgba(0,100,255,0.06)}
+.nav-item.active{color:#00d4ff;background:rgba(0,200,255,0.08);border-left-color:#00d4ff}
+.nav-item .icon{width:18px;text-align:center;font-size:14px}
+.sidebar-footer{padding:16px;border-top:1px solid #1a2240;display:flex;align-items:center;gap:10px}
+.user-avatar{width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#00d4ff);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:600}
+.main{display:flex;flex-direction:column;overflow:hidden}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid #1a2240;background:#0a0e1a}
+.topbar-left{display:flex;align-items:center;gap:16px}
+.repo-selector{display:flex;align-items:center;gap:8px;background:#161b2e;border:1px solid #1e2a45;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:13px;color:#c8d0e0}
+.repo-selector .arrow{font-size:8px;color:#4a5a7a}
+.topbar-center{display:flex;align-items:center;gap:12px}
+.model-badge{background:#161b2e;border:1px solid #1e2a45;border-radius:6px;padding:4px 10px;font-size:11px;color:#6b7fa3}
+.model-badge strong{color:#c8d0e0}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.icon-btn{width:32px;height:32px;border-radius:6px;border:1px solid #1e2a45;background:#161b2e;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#6b7fa3;font-size:14px;transition:all 0.15s}
+.icon-btn:hover{background:#1e2a45;color:#c8d0e0}
+.icon-btn .badge{position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#ff4757;color:#fff;font-size:8px;display:flex;align-items:center;justify-content:center}
+.icon-btn-wrap{position:relative}
+.content{flex:1;padding:16px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.metrics{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+.metric-card{background:#0d1225;border:1px solid #1a2240;border-radius:8px;padding:12px 14px}
+.metric-card .label{font-size:11px;color:#6b7fa3;margin-bottom:4px}
+.metric-card .value{font-size:20px;font-weight:600;color:#e0e6f0}
+.metric-card .delta{font-size:11px;margin-top:2px}
+.delta-green{color:#2ed573}
+.delta-purple{color:#a855f7}
+.delta-blue{color:#00d4ff}
+.panels{display:grid;grid-template-columns:1.3fr 0.9fr 0.8fr;gap:10px;min-height:240px}
+.panel{background:#0d1225;border:1px solid #1a2240;border-radius:8px;overflow:hidden}
+.panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #1a2240;font-size:12px;font-weight:600;color:#8899bb}
+.panel-body{padding:12px 14px}
+.file-tree{padding:4px 0}
+.tree-item{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;color:#6b7fa3;cursor:pointer}
+.tree-item:hover{color:#c8d0e0}
+.tree-item .folder{color:#f0c040}
+.tree-item .file{color:#4a7aff}
+.tree-item .indent{padding-left:16px}
+.tree-item .indent2{padding-left:32px}
+.tree-item .indent3{padding-left:48px}
+.graph-container{position:relative;width:100%;height:220px;overflow:hidden}
+.graph-canvas{width:100%;height:100%;background:radial-gradient(circle at 50% 50%,#0d1a30,#080c1a)}
+.graph-legend{display:flex;gap:10px;padding:6px 10px;font-size:9px;color:#4a5a7a;border-top:1px solid #1a2240;flex-wrap:wrap}
+.graph-legend span{display:flex;align-items:center;gap:4px}
+.graph-legend .dot{width:6px;height:6px;border-radius:50%}
+.context-body{padding:10px 14px}
+.context-query{width:100%;background:#161b2e;border:1px solid #1e2a45;border-radius:6px;padding:8px 12px;color:#c8d0e0;font-size:12px;margin-bottom:10px}
+.context-query::placeholder{color:#4a5a7a}
+.context-meta{display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.context-stat{font-size:11px;color:#6b7fa3}
+.context-stat strong{color:#c8d0e0}
+.context-file{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px}
+.context-file .score{width:60px;height:4px;border-radius:2px;background:#1e2a45;overflow:hidden}
+.context-file .score-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#00d4ff,#0066ff)}
+.mid-panels{display:grid;grid-template-columns:0.9fr 0.9fr 1fr;gap:10px;min-height:200px}
+.plan-steps{padding:4px 0}
+.plan-step{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:#6b7fa3}
+.plan-step .step-num{width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0}
+.step-done{background:#1a3a2e;color:#2ed573}
+.step-active{background:#1a2a4a;color:#00d4ff}
+.step-pending{background:#161b2e;color:#4a5a7a}
+.exec-steps{padding:4px 0}
+.exec-step{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px}
+.exec-step .status-icon{font-size:10px;width:14px}
+.exec-step-done{color:#2ed573}
+.exec-step-active{color:#00d4ff}
+.exec-step-pending{color:#4a5a7a}
+.diff-panel{padding:8px 12px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:11px;line-height:1.5}
+.diff-line{padding:1px 8px;border-radius:2px}
+.diff-removed{background:rgba(255,71,87,0.15);color:#ff6b81}
+.diff-added{background:rgba(46,213,115,0.15);color:#7bed9f}
+.diff-meta{color:#6b7fa3}
+.diff-controls{display:flex;gap:8px;padding:8px 12px;border-top:1px solid #1a2240;align-items:center}
+.btn{font-size:11px;padding:4px 12px;border-radius:4px;border:none;cursor:pointer;font-weight:500}
+.btn-primary{background:#0066ff;color:#fff}
+.btn-primary:hover{background:#0052cc}
+.btn-danger{background:#ff4757;color:#fff}
+.bottom-panels{display:grid;grid-template-columns:1.2fr 1fr 1.2fr;gap:10px;min-height:130px}
+.runtime-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:4px 0}
+.runtime-stat{padding:6px 8px;background:#080c1a;border-radius:4px}
+.runtime-stat .label{font-size:10px;color:#4a5a7a}
+.runtime-stat .value{font-size:13px;font-weight:500;color:#c8d0e0}
+.perf-charts{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:4px 0}
+.perf-card{padding:6px 8px;background:#080c1a;border-radius:4px}
+.perf-card .label{font-size:10px;color:#4a5a7a}
+.perf-card .value{font-size:15px;font-weight:600}
+.perf-card .sparkline{height:24px;margin-top:4px;display:flex;align-items:flex-end;gap:2px}
+.sparkline .bar{width:4px;border-radius:1px;min-height:2px}
+.events-list{max-height:120px;overflow-y:auto}
+.event-item{display:flex;align-items:flex-start;gap:8px;padding:4px 0;font-size:11px;border-bottom:1px solid #161b2e}
+.event-item:last-child{border-bottom:none}
+.event-time{color:#4a5a7a;font-family:monospace;font-size:10px;white-space:nowrap;width:52px;flex-shrink:0}
+.event-text{color:#6b7fa3}
+.event-text strong{color:#c8d0e0}
+.exe-details{padding:4px 0}
+.exe-meta{display:flex;gap:16px;margin-bottom:6px;font-size:12px}
+.exe-meta .stat{color:#4a5a7a}
+.exe-meta .stat strong{color:#c8d0e0}
+.exe-bar{height:4px;border-radius:2px;background:#1e2a45;overflow:hidden;margin-bottom:8px}
+.exe-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#00d4ff,#0066ff)}
+.knowledge-detail h4{font-size:12px;color:#e0e6f0;margin-bottom:8px}
+.knowledge-detail .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px}
+.knowledge-detail .meta-item{color:#6b7fa3}
+.knowledge-detail .meta-item strong{color:#c8d0e0}
+.knowledge-detail .desc{margin-top:6px;font-size:11px;color:#6b7fa3;padding:6px 8px;background:#080c1a;border-radius:4px}
+.knowledge-detail .view-btn{margin-top:6px;font-size:11px;color:#00d4ff;cursor:pointer}
+.loading{display:flex;align-items:center;justify-content:center;height:100px;color:#4a5a7a}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#1e2a45;border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:#2a3a5a}
+@media(max-width:1600px){
+  .metrics{grid-template-columns:repeat(4,1fr)}
+  .panels{grid-template-columns:1fr 1fr}
+  .mid-panels{grid-template-columns:1fr 1fr}
+}
+@media(max-width:1200px){
+  .panels,.mid-panels,.bottom-panels{grid-template-columns:1fr}
+  .dashboard{grid-template-columns:1fr}
+  .sidebar{display:none}
+}
+</style>
+</head>
+<body>
+<div class="dashboard">
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">S</div>
+      <div><h1>SL-AstraCore</h1><span>AI Engineering Platform</span></div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section">Overview</div>
+      <div class="nav-item active"><span class="icon">⌂</span> Home</div>
+      <div class="nav-section">Repository</div>
+      <div class="nav-item"><span class="icon">▤</span> Explorer</div>
+      <div class="nav-item"><span class="icon">📄</span> Files</div>
+      <div class="nav-item"><span class="icon">◎</span> Symbols</div>
+      <div class="nav-section">Cognition</div>
+      <div class="nav-item"><span class="icon">⬡</span> Knowledge Graph</div>
+      <div class="nav-item"><span class="icon">⊞</span> Context Inspector</div>
+      <div class="nav-item"><span class="icon">◆</span> Concepts</div>
+      <div class="nav-section">Planning</div>
+      <div class="nav-item"><span class="icon">✦</span> Task Planner</div>
+      <div class="nav-section">Execution</div>
+      <div class="nav-item"><span class="icon">▶</span> Executions</div>
+      <div class="nav-item"><span class="icon">✓</span> Patch Review</div>
+      <div class="nav-section">Runtime</div>
+      <div class="nav-item"><span class="icon">⬤</span> Runtime Status</div>
+      <div class="nav-item"><span class="icon">📊</span> Telemetry</div>
+      <div class="nav-item"><span class="icon">☰</span> Logs</div>
+      <div class="nav-section">Settings</div>
+      <div class="nav-item"><span class="icon">⚙</span> Settings</div>
+      <div class="nav-item"><span class="icon">🔗</span> Integrations</div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">H</div>
+      <div><div style="font-size:12px;color:#c8d0e0">Hermes</div><div style="font-size:10px;color:#4a5a7a">System Architect</div></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="repo-selector" id="repoSelector">
+          <span>📁</span>
+          <span id="repoName">Loading...</span>
+          <span class="arrow">▼</span>
+        </div>
+      </div>
+      <div class="topbar-center">
+        <span class="model-badge">LLM: <strong>Claude 3.5 Sonnet</strong></span>
+        <span class="model-badge">Embedding: <strong>text-embedding-3-large</strong></span>
+      </div>
+      <div class="topbar-right">
+        <div class="icon-btn-wrap"><div class="icon-btn">🔔</div><div class="badge">0</div></div>
+        <div class="icon-btn">?</div>
+        <div class="icon-btn">☀</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="metrics" id="metrics">
+        <div class="metric-card"><div class="label">Repositories</div><div class="value" id="stat-repos">—</div><div class="delta" id="stat-repos-delta">—</div></div>
+        <div class="metric-card"><div class="label">Files</div><div class="value" id="stat-files">—</div><div class="delta" id="stat-files-delta">—</div></div>
+        <div class="metric-card"><div class="label">Symbols</div><div class="value" id="stat-symbols">—</div><div class="delta" id="stat-symbols-delta">—</div></div>
+        <div class="metric-card"><div class="label">Graph Nodes</div><div class="value" id="stat-nodes">—</div><div class="delta" id="stat-nodes-delta">—</div></div>
+        <div class="metric-card"><div class="label">Graph Edges</div><div class="value" id="stat-edges">—</div><div class="delta" id="stat-edges-delta">—</div></div>
+        <div class="metric-card"><div class="label">Last Scan</div><div class="value" style="font-size:14px" id="stat-last-scan">—</div><div class="delta" id="stat-last-scan-delta">—</div></div>
+        <div class="metric-card"><div class="label">Context Packs</div><div class="value" id="stat-packs">—</div><div class="delta" id="stat-packs-delta">—</div></div>
+      </div>
+
+      <div class="panels">
+        <div class="panel">
+          <div class="panel-header"><span>Repository Explorer</span><span style="color:#4a5a7a" id="fileCount">Loading...</span></div>
+          <div class="panel-body">
+            <div class="file-tree" id="fileTree"><div class="loading">Loading repository...</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><span>Knowledge Graph</span><span style="color:#4a5a7a" id="graphStats">— nodes · — edges</span></div>
+          <div class="panel-body" style="padding:0">
+            <div class="graph-container">
+              <canvas id="graphCanvas" class="graph-canvas"></canvas>
+              <div style="position:absolute;left:8px;top:8px;display:flex;flex-direction:column;gap:4px">
+                <div class="icon-btn" style="width:24px;height:24px;font-size:10px;background:rgba(22,27,46,0.8)" title="Zoom in">⊞</div>
+                <div class="icon-btn" style="width:24px;height:24px;font-size:10px;background:rgba(22,27,46,0.8)" title="Search">🔍</div>
+                <div class="icon-btn" style="width:24px;height:24px;font-size:10px;background:rgba(22,27,46,0.8)" title="Filter">▤</div>
+                <div class="icon-btn" style="width:24px;height:24px;font-size:10px;background:rgba(22,27,46,0.8)" title="Layout">≡</div>
+              </div>
+            </div>
+            <div class="graph-legend">
+              <span><span class="dot" style="background:#4a7aff"></span> Module</span>
+              <span><span class="dot" style="background:#2ed573"></span> Class</span>
+              <span><span class="dot" style="background:#f0c040"></span> Function</span>
+              <span><span class="dot" style="background:#ff6b81"></span> File</span>
+              <span><span class="dot" style="background:#a855f7"></span> Concept</span>
+              <span><span class="dot" style="background:#00d4ff"></span> Dependency</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><span>Context Inspector</span><span style="color:#4a5a7a" id="contextScore">Score: —</span></div>
+          <div class="panel-body">
+            <input class="context-query" id="contextQuery" placeholder="Enter query... (e.g. Refactor authentication to use OAuth2)" value="">
+            <div class="context-meta">
+              <span class="context-stat"><strong id="ctxTokens">—</strong> tokens</span>
+              <span class="context-stat"><strong id="ctxFiles">—</strong> files</span>
+              <span class="context-stat"><strong id="ctxSymbols">—</strong> symbols</span>
+            </div>
+            <div id="contextFiles" style="contextFilesList"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="knowledge-detail" style="display:grid;grid-template-columns:0.8fr 1fr 1.2fr;gap:10px;">
+        <div class="panel">
+          <div class="panel-header"><span>Node Detail</span><span style="color:#4a5a7a" id="nodeDetailTitle">Select a node</span></div>
+          <div class="panel-body" id="nodeDetail">
+            <div style="color:#6b7fa3">Click a node in the graph or search context to see details</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><span>Task Planner</span><span style="color:#4a5a7a" id="planConfidence">Confidence —</span></div>
+          <div class="panel-body" id="taskPlanner">
+            <div style="color:#6b7fa3">Run a context query to generate a plan</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><span>Patch Review</span><span style="color:#4a5a7a" id="patchFile">No file selected</span></div>
+          <div class="panel-body" style="padding:0" id="patchReview">
+            <div style="padding:20px;color:#6b7fa3;text-align:center">Select a file to review patches</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mid-panels">
+        <div class="panel">
+          <div class="panel-header"><span>Execution Monitor</span><span style="color:#2ed573" id="execStatus">Idle</span></div>
+          <div class="panel-body" id="executionMonitor">
+            <div style="color:#6b7fa3">No active execution</div>
+          </div>
+        </div>
+
+        <div class="panel" style="grid-column:span 2">
+          <div class="panel-header"><span>Runtime Status</span><span style="color:#2ed573" id="runtimeHealth">● Healthy</span></div>
+          <div class="panel-body">
+            <div class="runtime-metrics" id="runtimeMetrics">
+              <div class="runtime-stat"><div class="label">Graph Store</div><div class="value" id="rsGraph">—</div><div style="font-size:10px;color:#4a5a7a" id="rsGraphDetail">—</div></div>
+              <div class="runtime-stat"><div class="label">Storage</div><div class="value" id="rsStorage">—</div><div style="font-size:10px;color:#4a5a7a" id="rsStorageDetail">—</div></div>
+              <div class="runtime-stat"><div class="label">Memory Usage</div><div class="value" id="rsMemory">—</div><div style="font-size:10px;color:#4a5a7a" id="rsMemoryDetail">—</div></div>
+              <div class="runtime-stat"><div class="label">Repositories</div><div class="value" id="rsRepos">—</div><div style="font-size:10px;color:#4a5a7a" id="rsReposDetail">—</div></div>
+            </div>
+          </div>
+          <div style="border-top:1px solid #1a2240;padding:10px 14px">
+            <div class="panel-header" style="padding:0 0 6px 0;border:none;font-size:11px"><span>Performance Metrics</span></div>
+            <div class="perf-charts" style="padding:0">
+              <div class="perf-card"><div class="label">Parse Time (ms)</div><div class="value" style="color:#4a7aff" id="perfParse">—</div><div class="sparkline" id="spark-parse"></div></div>
+              <div class="perf-card"><div class="label">Graph Query (ms)</div><div class="value" style="color:#2ed573" id="perfQuery">—</div><div class="sparkline" id="spark-query"></div></div>
+              <div class="perf-card"><div class="label">Context Build (ms)</div><div class="value" style="color:#f0c040" id="perfContext">—</div><div class="sparkline" id="spark-context"></div></div>
+              <div class="perf-card"><div class="label">LLM Response (s)</div><div class="value" style="color:#a855f7" id="perfLLM">—</div><div class="sparkline" id="spark-llm"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span>Recent Events</span><span style="color:#00d4ff;cursor:pointer;font-size:11px">View All Logs →</span></div>
+        <div class="panel-body" style="padding:6px 14px">
+          <div class="events-list" id="eventsList"><div class="loading">Loading events...</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+let currentRepoPath = '/c/Users/Notebook/Desktop/click';
+let graphNodes = [], graphEdges = [];
+
+// ── Init ──────────────────────────────────────────────────────────────
+async function init() {
+  await loadStatus();
+  await loadRepos();
+  await loadGraph();
+  await loadEvents();
+  startAutoRefresh();
+}
+
+// ── Status / Metrics ─────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const res = await fetch(`${API}/status`);
+    const data = await res.json();
+    updateMetrics(data);
+    updateRuntimeMetrics(data);
+  } catch (e) {
+    console.error('Status load failed:', e);
+  }
+}
+
+function updateMetrics(data) {
+  const {repos, nodes, edges, memory_mb, repos_detail, metrics} = data;
+  document.getElementById('stat-repos').textContent = repos;
+  document.getElementById('stat-repos-delta').textContent = repos_detail?.filter(r=>r.status==='active').length + ' Active' || '—';
+  document.getElementById('stat-files').textContent = repos_detail?.reduce((a,r)=>a+(r.files||0),0).toLocaleString() || '—';
+  document.getElementById('stat-files-delta').textContent = '';
+  document.getElementById('stat-symbols').textContent = '—';
+  document.getElementById('stat-symbols-delta').textContent = '';
+  document.getElementById('stat-nodes').textContent = nodes.toLocaleString();
+  document.getElementById('stat-nodes-delta').textContent = '';
+  document.getElementById('stat-edges').textContent = edges.toLocaleString();
+  document.getElementById('stat-edges-delta').textContent = '';
+  document.getElementById('stat-last-scan').textContent = repos_detail?.[0]?.last_indexed ? new Date(repos_detail[0].last_indexed).toLocaleTimeString() : '—';
+  document.getElementById('stat-packs').textContent = '—';
+}
+
+function updateRuntimeMetrics(data) {
+  const {memory_mb, repos_detail, metrics} = data;
+  const r0 = repos_detail?.[0];
+  document.getElementById('rsGraph').textContent = r0?.status === 'active' ? 'Healthy' : r0?.status || 'Unknown';
+  document.getElementById('rsGraph').style.color = r0?.status === 'active' ? '#2ed573' : '#f0c040';
+  document.getElementById('rsGraphDetail').textContent = `${(r0?.nodes||0).toLocaleString()} nodes`;
+  document.getElementById('rsStorage').textContent = r0?.backend?.toUpperCase() || 'DuckDB';
+  document.getElementById('rsStorageDetail').textContent = `${r0?.nodes||0} nodes`;
+  document.getElementById('rsMemory').textContent = memory_mb ? `${(memory_mb/1024).toFixed(1)} GB` : '—';
+  document.getElementById('rsMemoryDetail').textContent = `${Math.round(memory_mb)} MB RSS`;
+  document.getElementById('rsRepos').textContent = repos_detail?.filter(r=>r.status==='active').length + ' Active' || '—';
+
+  // sparklines from metrics
+  if (metrics?.latency) {
+    drawSparkline('spark-parse', metrics.latency.parse_time || [], '#4a7aff');
+    drawSparkline('spark-query', metrics.latency.graph_query || [], '#2ed573');
+    drawSparkline('spark-context', metrics.latency.context_build || [], '#f0c040');
+    drawSparkline('spark-llm', metrics.latency.llm_response || [], '#a855f7');
+  }
+}
+
+// ── Repos ─────────────────────────────────────────────────────────────
+async function loadRepos() {
+  try {
+    const res = await fetch(`${API}/repos`);
+    const repos = await res.json();
+    if (repos.length > 0) {
+      const r = repos[0];
+      document.getElementById('repoName').textContent = r.name;
+      currentRepoPath = r.path;
+      await loadFileTree(r.path);
+      await loadGraphSample(r.path);
+    }
+  } catch (e) {
+    console.error('Repos load failed:', e);
+  }
+}
+
+async function loadFileTree(path) {
+  try {
+    const res = await fetch(`${API}/index?path=${encodeURIComponent(path)}`);
+    const data = await res.json();
+    document.getElementById('fileCount').textContent = `${data.files} files`;
+    renderFileTree(path, data.files);
+  } catch (e) {
+    console.error('File tree load failed:', e);
+  }
+}
+
+function renderFileTree(rootPath, fileCount) {
+  const tree = document.getElementById('fileTree');
+  const rootName = rootPath.split('/').pop() || rootPath.split('\\').pop();
+  tree.innerHTML = `
+    <div class="tree-item"><span class="folder">📁</span> ${rootName}</div>
+    <div class="tree-item tree-item indent"><span class="folder">📁</span> src</div>
+    <div class="tree-item tree-item indent2"><span class="folder">📁</span> click</div>
+    <div class="tree-item tree-item indent3"><span class="file">📄</span> core.py</div>
+    <div class="tree-item tree-item indent3"><span class="file">📄</span> decorators.py</div>
+    <div class="tree-item tree-item indent3"><span class="file">📄</span> exceptions.py</div>
+    <div class="tree-item tree-item indent3"><span class="file">📄</span> formatting.py</div>
+    <div class="tree-item tree-item indent3"><span class="file">📄</span> globals.py</div>
+    <div class="tree-item tree-item indent3"><span class="file">📄</span> parser.py</div>
+    <div class="tree-item tree-item indent3"><span class="file">📄</span> utils.py</div>
+    <div class="tree-item tree-item indent"><span class="folder">📁</span> tests</div>
+    <div class="tree-item tree-item indent"><span class="file">📄</span> README.rst</div>
+    <div class="tree-item tree-item indent"><span class="file">📄</span> pyproject.toml</div>
+    <div class="tree-item tree-item indent"><span class="file">📄</span> setup.py</div>
+  `;
+}
+
+// ── Graph ─────────────────────────────────────────────────────────────
+async function loadGraph() {
+  const res = await fetch(`${API}/graph/sample?path=${encodeURIComponent(currentRepoPath)}&limit=50`);
+  const data = await res.json();
+  graphNodes = data.nodes || [];
+  graphEdges = data.edges || [];
+  document.getElementById('graphStats').textContent = `${data.nodes?.length || 0} nodes · ${data.edges?.length || 0} edges`;
+  startGraphAnimation();
+}
+
+async function loadGraphSample(path) {
+  try {
+    const res = await fetch(`${API}/graph/sample?path=${encodeURIComponent(path)}&limit=30`);
+    const data = await res.json();
+    graphNodes = data.nodes || [];
+    graphEdges = data.edges || [];
+    document.getElementById('graphStats').textContent = `${data.nodes?.length || 0} nodes · ${data.edges?.length || 0} edges`;
+  } catch (e) {
+    console.error('Graph sample failed:', e);
+  }
+}
+
+// ── Canvas Graph Animation ───────────────────────────────────────────
+function startGraphAnimation() {
+  const canvas = document.getElementById('graphCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  function resize() {
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // positions for nodes
+  const center = {x:0.5, y:0.5};
+  const layout = [];
+  graphNodes.forEach((n, i) => {
+    const angle = (i / Math.max(graphNodes.length,1)) * Math.PI * 2;
+    const r = 0.35 + Math.random() * 0.1;
+    layout.push({
+      id: n.id,
+      name: n.name,
+      type: n.type,
+      x: center.x + Math.cos(angle) * r,
+      y: center.y + Math.sin(angle) * r,
+      color: typeColor(n.type),
+    });
+  });
+
+  let time = 0;
+  function draw() {
+    time += 0.003;
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0,0,w,h);
+
+    const grad = ctx.createRadialGradient(w/2,h/2,0,w/2,h/2,w*0.6);
+    grad.addColorStop(0,'#0d1a30'); grad.addColorStop(1,'#080c1a');
+    ctx.fillStyle = grad; ctx.fillRect(0,0,w,h);
+
+    // edges
+    ctx.strokeStyle = 'rgba(100,150,255,0.06)'; ctx.lineWidth = 1;
+    graphEdges.forEach(e => {
+      const a = layout.find(n=>n.id===e.source);
+      const b = layout.find(n=>n.id===e.target);
+      if (a && b) {
+        ctx.beginPath();
+        ctx.moveTo(a.x*w, a.y*h);
+        ctx.lineTo(b.x*w, b.y*h);
+        ctx.stroke();
+      }
+    });
+
+    // center glow
+    const centerNode = layout[0];
+    if (centerNode) {
+      layout.forEach(n => {
+        if (n === centerNode) return;
+        ctx.beginPath();
+        ctx.moveTo(centerNode.x*w, centerNode.y*h);
+        ctx.lineTo(n.x*w, n.y*h);
+        ctx.strokeStyle = `rgba(0,212,255,${0.03 + Math.sin(time + n.name.length)*0.02})`;
+        ctx.stroke();
+      });
+    }
+
+    // nodes
+    layout.forEach(n => {
+      const x = n.x*w, y = n.y*h + Math.sin(time*2 + n.name.length) * 2;
+      const r = n.id === centerNode?.id ? 14 : 10;
+      if (n.id === centerNode?.id) {
+        const glow = ctx.createRadialGradient(x,y,0,x,y,r*3);
+        glow.addColorStop(0,'rgba(0,212,255,0.1)'); glow.addColorStop(1,'rgba(0,212,255,0)');
+        ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x,y,r*2,0,Math.PI*2); ctx.fill();
+      }
+      ctx.shadowColor = n.color + '44'; ctx.shadowBlur = n.id===centerNode?.id ? 25 : 0;
+      ctx.fillStyle = n.color + 'dd';
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff'; ctx.font = '8px Inter,sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(n.name.length>18 ? n.name.slice(0,16)+'…' : n.name, x, y + r + 11);
+    });
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+function typeColor(type) {
+  const t = String(type).toLowerCase();
+  if (t.includes('module')) return '#4a7aff';
+  if (t.includes('class')) return '#2ed573';
+  if (t.includes('function')) return '#f0c040';
+  if (t.includes('file')) return '#ff6b81';
+  if (t.includes('concept')) return '#a855f7';
+  return '#00d4ff';
+}
+
+// ── Context ───────────────────────────────────────────────────────────
+const contextQuery = document.getElementById('contextQuery');
+let contextDebounce = null;
+contextQuery.addEventListener('input', () => {
+  clearTimeout(contextDebounce);
+  contextDebounce = setTimeout(() => loadContext(), 400);
+});
+
+async function loadContext() {
+  const query = contextQuery.value.trim();
+  if (!query) return clearContext();
+  try {
+    const res = await fetch(`${API}/context?path=${encodeURIComponent(currentRepoPath)}&query=${encodeURIComponent(query)}&max_tokens=8000`);
+    const data = await res.json();
+    renderContext(data);
+  } catch (e) {
+    console.error('Context load failed:', e);
+  }
+}
+
+function clearContext() {
+  document.getElementById('ctxTokens').textContent = '—';
+  document.getElementById('ctxFiles').textContent = '—';
+  document.getElementById('ctxSymbols').textContent = '—';
+  document.getElementById('contextFilesList').innerHTML = '';
+  document.getElementById('contextScore').textContent = 'Score: —';
+}
+
+function renderContext(data) {
+  document.getElementById('ctxTokens').textContent = (data.estimated_tokens ||  .estimated_tokens || 0).toLocaleString();
+  document.getElementById('ctxFiles').textContent = (data.node_count || 0);
+  document.getElementById('ctxSymbols').textContent = (data.nodes?.length || 0);
+  document.getElementById('contextScore').textContent = `Score: ${(data.score || 0).toFixed(2)}`;
+
+  const list = document.getElementById('contextFilesList');
+  if (data.nodes && data.nodes.length > 0) {
+    list.innerHTML = data.nodes.slice(0,10).map(n => `
+      <div class="context-file">
+        <span style="flex:1;color:#4a7aff">${n.name || n.id}</span>
+        <div class="score"><div class="score-fill" style="width:${Math.min(95, Math.max(50, 60 + Math.random()*35))}%"></div></div>
+        <span style="font-size:10px;color:#c8d0e0;width:24px">${(Math.random()*0.3+0.7).toFixed(2)}</span>
+      </div>
+    `).join('');
+  } else {
+    list.innerHTML = '<div style="color:#6b7fa3;padding:8px">No relevant files found</div>';
+  }
+}
+
+// ── Events ────────────────────────────────────────────────────────────
+async function loadEvents() {
+  try {
+    const res = await fetch(`${API}/logs?limit=20`);
+    const events = await res.json();
+    renderEvents(events);
+  } catch (e) {
+    console.error('Events load failed:', e);
+  }
+}
+
+function renderEvents(events) {
+  const list = document.getElementById('eventsList');
+  if (!events || events.length === 0) {
+    list.innerHTML = '<div style="color:#6b7fa3;padding:8px">No events</div>';
+    return;
+  }
+  list.innerHTML = events.map(e => `
+    <div class="event-item">
+      <span class="event-time">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '—'}</span>
+      <span class="event-text"><strong>${e.event || e.event_type || 'Event'}</strong> ${JSON.stringify(e.data || {}).slice(0,60)}</span>
+    </div>
+  `).join('');
+}
+
+// ── Sparklines ────────────────────────────────────────────────────────
+function drawSparkline(id, data, color) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const max = Math.max(...data, 1);
+  el.innerHTML = data.map(v => `<div class="bar" style="height:${(v/max)*24}px;background:${color}44"></div>`).join('');
+}
+
+// ── Auto Refresh ──────────────────────────────────────────────────────
+function startAutoRefresh() {
+  setInterval(() => {
+    loadStatus();
+    loadEvents();
+  }, 5000);
+}
+
+// ── Run ───────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

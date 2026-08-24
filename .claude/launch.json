@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "astra-dashboard",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "dashboard_app:app", "--host", "127.0.0.1", "--port", "8780"],
+      "port": 8780
+    }
+  ]
+}
