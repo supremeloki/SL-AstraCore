@@ -53,6 +53,18 @@ def _edge_from_row(row) -> IREdge:
     )
 
 
+_list_cast_warmed = False
+
+
+def _warm_list_cast(conn: "duckdb.DuckDBPyConnection") -> None:
+    # First list-cast unnest in a duckdb 1.5.x process costs 10-20s of one-time
+    # codegen. Warm it lazily once so every subsequent batch write is ms-fast.
+    global _list_cast_warmed
+    if not _list_cast_warmed:
+        conn.execute("SELECT unnest(?::VARCHAR[])", [["__astra_warmup__"]])
+        _list_cast_warmed = True
+
+
 class DuckDBBackend:
     """DuckDB persistent graph backend — default production backend."""
 
@@ -62,6 +74,7 @@ class DuckDBBackend:
 
     def connect(self) -> None:
         self._conn = duckdb.connect(self._db_path)
+        _warm_list_cast(self._conn)
         self._conn.execute(_NODE_DDL)
         self._conn.execute(_EDGE_DDL)
 
@@ -172,3 +185,91 @@ class DuckDBBackend:
 
     def edge_count(self) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM graph_edges").fetchone()[0]
+
+    # Batch operations (Phase 2 hardened)
+    def add_nodes(self, nodes: Sequence[IRNode]) -> None:
+        if not nodes:
+            return
+        rows = [
+            [n.id, n.type.name, n.name, n.source,
+             n.confidence, json.dumps(n.metadata, default=str)]
+            for n in nodes
+        ]
+        self._upsert_rows("graph_nodes", "id", rows)
+
+    def add_edges(self, edges: Sequence[IREdge]) -> None:
+        if not edges:
+            return
+        rows = [
+            [e.from_node, e.to_node, e.type.name,
+             e.weight, e.confidence, json.dumps(e.metadata, default=str)]
+            for e in edges
+        ]
+        self._upsert_rows("graph_edges", ["from_node", "to_node", "type"], rows)
+
+    def _upsert_rows(
+        self,
+        table: str,
+        key_columns: str | list[str],
+        rows: list[list[object]],
+    ) -> None:
+        # executemany with INSERT OR REPLACE rebuilds the PK index per row in DuckDB
+        # and is orders of magnitude slower than a set-based unnest insert.
+        keys = [key_columns] if isinstance(key_columns, str) else key_columns
+        key_list = ", ".join(keys)
+
+        _warm_list_cast(self.conn)
+        columns = self._table_columns(table)
+        column_arrays = [[r[i] for r in rows] for i in range(len(columns))]
+        unnest_select = ", ".join(f"unnest(?::VARCHAR[]) AS {col}" for col in columns)
+
+        self.conn.execute("CREATE TEMP TABLE IF NOT EXISTS _astra_batch AS SELECT * FROM " + table + " LIMIT 0")
+        self.conn.execute("DELETE FROM _astra_batch")
+        self.conn.execute(
+            f"INSERT INTO _astra_batch SELECT * FROM (SELECT {unnest_select} FROM (SELECT 1) _) AS batch",
+            column_arrays,
+        )
+        self.conn.execute(
+            f"DELETE FROM {table} WHERE ({key_list}) IN (SELECT {key_list} FROM _astra_batch)"
+        )
+        self.conn.execute(f"INSERT INTO {table} SELECT * FROM _astra_batch")
+        self.conn.execute("DROP TABLE _astra_batch")
+
+    def _table_columns(self, table: str) -> list[str]:
+        rows = self.conn.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = ? ORDER BY ordinal_position",
+            [table],
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def transaction(self) -> _TransactionCtx:
+        return _DuckDBTransaction(self)
+
+
+class _DuckDBTransaction:
+    """Atomic transaction context for DuckDB."""
+
+    def __init__(self, backend: "DuckDBBackend") -> None:
+        self._backend = backend
+        self._committed = False
+
+    def __enter__(self) -> "_DuckDBTransaction":
+        self._backend.conn.execute("BEGIN TRANSACTION")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        if exc_type is None and not self._committed:
+            self._backend.conn.execute("COMMIT")
+            self._committed = True
+        elif exc_type is not None:
+            self._backend.conn.execute("ROLLBACK")
+
+    def commit(self) -> None:
+        if not self._committed:
+            self._backend.conn.execute("COMMIT")
+            self._committed = True
+
+    def rollback(self) -> None:
+        if not self._committed:
+            self._backend.conn.execute("ROLLBACK")
+            self._committed = True

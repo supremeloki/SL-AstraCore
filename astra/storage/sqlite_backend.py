@@ -62,6 +62,7 @@ class SQLiteBackend:
     def connect(self) -> None:
         self._conn = sqlite3.connect(self._db_path)
         self._conn.row_factory = None
+        self._conn.isolation_level = None  # autocommit on by default
         self._conn.execute(_NODE_DDL)
         self._conn.execute(_EDGE_DDL)
         self._conn.commit()
@@ -77,13 +78,13 @@ class SQLiteBackend:
             raise RuntimeError("SQLiteBackend not connected")
         return self._conn
 
+    # CRUD (no auto-commit; transaction handles it)
     def add_node(self, node: IRNode) -> None:
         self.conn.execute(
             "INSERT OR REPLACE INTO graph_nodes VALUES (?, ?, ?, ?, ?, ?)",
             [node.id, node.type.name, node.name, node.source,
              node.confidence, json.dumps(node.metadata, default=str)],
         )
-        self.conn.commit()
 
     def get_node(self, node_id: str) -> Optional[IRNode]:
         cur = self.conn.execute(
@@ -98,7 +99,6 @@ class SQLiteBackend:
             "DELETE FROM graph_edges WHERE from_node = ? OR to_node = ?",
             [node_id, node_id],
         )
-        self.conn.commit()
 
     def get_all_nodes(self) -> Sequence[IRNode]:
         cur = self.conn.execute("SELECT * FROM graph_nodes")
@@ -110,7 +110,6 @@ class SQLiteBackend:
             [edge.from_node, edge.to_node, edge.type.name,
              edge.weight, edge.confidence, json.dumps(edge.metadata, default=str)],
         )
-        self.conn.commit()
 
     def get_edges(
         self,
@@ -138,7 +137,6 @@ class SQLiteBackend:
             "DELETE FROM graph_edges WHERE from_node = ? AND to_node = ? AND type = ?",
             [from_node, to_node, type_name],
         )
-        self.conn.commit()
 
     def get_all_edges(self) -> Sequence[IREdge]:
         cur = self.conn.execute("SELECT * FROM graph_edges")
@@ -178,3 +176,60 @@ class SQLiteBackend:
 
     def edge_count(self) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM graph_edges").fetchone()[0]
+
+    # Batch operations (Phase 2 hardened)
+    def add_nodes(self, nodes: Sequence[IRNode]) -> None:
+        if not nodes:
+            return
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO graph_nodes VALUES (?, ?, ?, ?, ?, ?)",
+            [(n.id, n.type.name, n.name, n.source,
+              n.confidence, json.dumps(n.metadata, default=str))
+             for n in nodes],
+        )
+
+    def add_edges(self, edges: Sequence[IREdge]) -> None:
+        if not edges:
+            return
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO graph_edges VALUES (?, ?, ?, ?, ?, ?)",
+            [(e.from_node, e.to_node, e.type.name,
+              e.weight, e.confidence, json.dumps(e.metadata, default=str))
+             for e in edges],
+        )
+
+    def transaction(self) -> "_SQLiteTransaction":
+        return _SQLiteTransaction(self)
+
+
+class _SQLiteTransaction:
+    """Atomic transaction context for SQLite."""
+
+    def __init__(self, backend: "SQLiteBackend") -> None:
+        self._backend = backend
+        self._committed = False
+
+    def __enter__(self) -> "_SQLiteTransaction":
+        self._backend.conn.isolation_level = "DEFERRED"
+        self._backend.conn.execute("BEGIN")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        try:
+            if exc_type is None and not self._committed:
+                self._backend.conn.commit()
+                self._committed = True
+            elif exc_type is not None:
+                self._backend.conn.rollback()
+        finally:
+            self._backend.conn.isolation_level = None
+
+    def commit(self) -> None:
+        if not self._committed:
+            self._backend.conn.commit()
+            self._committed = True
+
+    def rollback(self) -> None:
+        if not self._committed:
+            self._backend.conn.rollback()
+            self._committed = True

@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-from typing import Protocol, Sequence, Optional, Any
+from typing import Callable, Protocol, Sequence, Optional, Any
 from astra.ir.models import IRNode, IREdge, NodeType, EdgeType
 
 
 class StorageBackend(Protocol):
-    """Protocol for persistent graph storage backends.
-
-    DuckDB, SQLite, and future backends implement this.
-    No backend-specific imports leak into core modules.
-    """
+    """Protocol for persistent graph storage backends."""
 
     def connect(self) -> None: ...
     def close(self) -> None: ...
@@ -22,15 +18,10 @@ class StorageBackend(Protocol):
 
     # Edge CRUD
     def add_edge(self, edge: IREdge) -> None: ...
-    def get_edges(
-        self,
-        from_node: Optional[str] = None,
-        to_node: Optional[str] = None,
-        edge_type: Optional[EdgeType] = None,
-    ) -> Sequence[IREdge]: ...
-    def delete_edge(
-        self, from_node: str, to_node: str, edge_type: object
-    ) -> None: ...
+    def get_edges(self, from_node: Optional[str] = None,
+                  to_node: Optional[str] = None,
+                  edge_type: Optional[EdgeType] = None) -> Sequence[IREdge]: ...
+    def delete_edge(self, from_node: str, to_node: str, edge_type: object) -> None: ...
     def get_all_edges(self) -> Sequence[IREdge]: ...
 
     # Search / Query
@@ -46,15 +37,21 @@ class StorageBackend(Protocol):
     def node_count(self) -> int: ...
     def edge_count(self) -> int: ...
 
+    # Batch / Transaction (Phase 2 hardened)
+    def add_nodes(self, nodes: Sequence[IRNode]) -> None: ...
+    def add_edges(self, edges: Sequence[IREdge]) -> None: ...
+    def transaction(self) -> _TransactionCtx: ...
+
+
+class _TransactionCtx:
+    """Context manager for atomic storage transactions."""
+    def __enter__(self) -> "_TransactionCtx": ...
+    def __exit__(self, *args: Any) -> None: ...
+    def rollback(self) -> None: ...
+
 
 class StorageProvider:
-    """Config-driven storage backend factory.
-
-    Usage:
-        provider = StorageProvider(backend="duckdb", db_path="...")
-        storage = provider.create()
-        storage.connect()
-    """
+    """Config-driven storage backend factory."""
 
     def __init__(self, backend: str, db_path: str) -> None:
         self._backend_name = backend

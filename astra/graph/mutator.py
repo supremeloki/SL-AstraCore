@@ -94,19 +94,39 @@ class GraphMutator:
     ) -> GraphMutationResult:
         """Apply a batch of mutations atomically."""
         total = GraphMutationResult()
-        
-        for node in nodes_to_delete:
-            total = self._merge(total, self.apply_node_delete(node))
-            
-        for node in nodes_to_upsert:
-            total = self._merge(total, self.apply_node_upsert(node))
-            
-        for edge in edges_to_delete:
-            total = self._merge(total, self.apply_edge_delete(*edge))
-            
-        for edge in edges_to_upsert:
-            total = self._merge(total, self.apply_edge_upsert(edge))
-            
+
+        with self._storage.transaction():
+            for node in nodes_to_delete:
+                total = self._merge(total, self.apply_node_delete(node))
+
+            if nodes_to_upsert and hasattr(self._storage, "add_nodes"):
+                existing_ids = self._storage.get_node_ids()
+                self._storage.add_nodes(nodes_to_upsert)
+                for node in nodes_to_upsert:
+                    if node.id in existing_ids:
+                        total = self._merge(total, GraphMutationResult(updated_nodes=1))
+                    else:
+                        total = self._merge(total, GraphMutationResult(added_nodes=1))
+            else:
+                for node in nodes_to_upsert:
+                    total = self._merge(total, self.apply_node_upsert(node))
+
+            for edge in edges_to_delete:
+                total = self._merge(total, self.apply_edge_delete(*edge))
+
+            if edges_to_upsert and hasattr(self._storage, "add_edges"):
+                existing_edges = self._storage.get_edge_keys()
+                self._storage.add_edges(edges_to_upsert)
+                for edge in edges_to_upsert:
+                    key = (edge.from_node, edge.to_node, edge.type.name)
+                    if key in existing_edges:
+                        total = self._merge(total, GraphMutationResult(updated_edges=1))
+                    else:
+                        total = self._merge(total, GraphMutationResult(added_edges=1))
+            else:
+                for edge in edges_to_upsert:
+                    total = self._merge(total, self.apply_edge_upsert(edge))
+
         return total
         
     def _merge(self, a: GraphMutationResult, b: GraphMutationResult) -> GraphMutationResult:

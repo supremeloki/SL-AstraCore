@@ -54,6 +54,7 @@ def detect_circular_dependencies(deps: Sequence[IRDependency]) -> Sequence[Confl
             graph[dep.source_file].add(target)
 
     conflicts = []
+    seen_cycles: set[tuple[str, ...]] = set()
 
     visited: set[str] = set()
     stack: set[str] = set()
@@ -61,15 +62,18 @@ def detect_circular_dependencies(deps: Sequence[IRDependency]) -> Sequence[Confl
     def _dfs(node: str, path: list[str]) -> None:
         if node in stack:
             cycle_start = path.index(node)
-            cycle = path[cycle_start:] + [node]
-            conflicts.append(ConflictMatch(
-                source_a=cycle[0],
-                source_b=cycle[-2],
-                category="circular_dependency",
-                severity="high",
-                confidence=0.9,
-                description=f"circular dependency: {' -> '.join(cycle[:5])}",
-            ))
+            cycle = tuple(path[cycle_start:] + [node])
+            cycle_canonical = tuple(sorted(cycle[:-1]))
+            if cycle_canonical not in seen_cycles:
+                seen_cycles.add(cycle_canonical)
+                conflicts.append(ConflictMatch(
+                    source_a=cycle[0],
+                    source_b=cycle[-2],
+                    category="circular_dependency",
+                    severity="high",
+                    confidence=0.9,
+                    description=f"circular dependency: {' -> '.join(cycle[:5])}",
+                ))
             return
         if node in visited:
             return
