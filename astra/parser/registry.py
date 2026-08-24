@@ -65,5 +65,17 @@ _global_registry: ParserRegistry | None = None
 def get_parser_registry() -> ParserRegistry:
     global _global_registry
     if _global_registry is None:
-        _global_registry = ParserRegistry()
+        _global_registry = build_default_parser_registry()
     return _global_registry
+
+
+def build_default_parser_registry() -> ParserRegistry:
+    from astra.parser.jsts_adapter import JSTSParserAdapter
+    from astra.parser.markdown_adapter import MarkdownParserAdapter
+    from astra.parser.python_adapter import PythonParserAdapter
+
+    registry = ParserRegistry()
+    registry.register(PythonParserAdapter())
+    registry.register(JSTSParserAdapter())
+    registry.register(MarkdownParserAdapter())
+    return registry

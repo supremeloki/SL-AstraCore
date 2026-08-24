@@ -192,8 +192,8 @@ class ContextSelector:
                 critical.append({
                     "from": edge.from_node,
                     "to": edge.to_node,
-                    "type": edge.edge_type.value,
-                    "weight": edge.weight,
+                    "type": (edge.edge_type.value if hasattr(edge, "edge_type") else (edge.type.value if hasattr(edge.type, "value") else str(edge.type))),
+                    "weight": getattr(edge, "weight", 1.0),
                 })
             if len(critical) >= 50:
                 break

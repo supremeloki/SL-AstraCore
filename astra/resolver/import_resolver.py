@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Sequence
@@ -23,6 +24,7 @@ def resolve_imports_into_edges(
     Returns:
         (resolved_imports_map, dependency_edges)
     """
+    root_prefix = _common_root(parse_results)
     module_to_file: dict[str, str] = {}
     file_to_module: dict[str, str] = {}
 
@@ -30,7 +32,8 @@ def resolve_imports_into_edges(
         if not result.file_node:
             continue
         fp = result.file_node.file_path
-        file_path = Path(fp)
+        rel_fp = _relativize(fp, root_prefix)
+        file_path = Path(rel_fp)
 
         stem = file_path.stem
         parent = file_path.parent.as_posix()
@@ -55,7 +58,8 @@ def resolve_imports_into_edges(
 
         for dep in result.dependencies:
             resolved_path = _resolve_one_import(
-                dep, src_fp, module_to_file, file_to_module, parsed_files={r.file_node.file_path for r in parse_results if r.file_node}
+                dep, _relativize(src_fp, root_prefix), module_to_file, file_to_module,
+                parsed_files={_relativize(r.file_node.file_path, root_prefix) for r in parse_results if r.file_node},
             )
             resolved_imports[dep.target_module] = resolved_path or ""
 
@@ -82,6 +86,37 @@ def safe_module(parent: str, stem: str) -> str:
     if parent_clean:
         return f"{parent_clean}.{stem}"
     return stem
+
+
+def _common_root(parse_results: Sequence[IRFileParseResult]) -> str | None:
+    paths: list[Path] = []
+    for r in parse_results:
+        if r.file_node and Path(r.file_node.file_path).is_absolute():
+            paths.append(Path(r.file_node.file_path))
+    if len(paths) < 2:
+        return None
+    try:
+        common = Path(os.path.commonpath([str(p) for p in paths]))
+    except ValueError:
+        return None
+    if common == common.anchor or common.name == "":
+        return None
+    parts = common.parts
+    if any(p in ("node_modules", ".venv", "venv", "__pycache__") for p in parts):
+        return None
+    return str(common)
+
+
+def _relativize(fp: str, root_prefix: str | None) -> str:
+    if root_prefix is None:
+        return fp
+    p = Path(fp)
+    if p.is_absolute():
+        try:
+            return p.relative_to(root_prefix).as_posix()
+        except ValueError:
+            return fp
+    return fp
 
 
 def _resolve_one_import(

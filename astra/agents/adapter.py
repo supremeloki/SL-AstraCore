@@ -102,6 +102,7 @@ class AgentAdapterLayer:
         context: IRContextPack,
         response_text: str = "",
         max_retries: int = 3,
+        **kwargs,
     ) -> AgentResponse:
         """Execute with automatic retry and event emission."""
         attempt = 0

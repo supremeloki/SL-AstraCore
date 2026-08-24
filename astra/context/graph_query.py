@@ -88,7 +88,8 @@ class GraphQuery:
             for neighbor, edge in adj_map.get(nid, []):
                 if neighbor not in visited:
                     visited[neighbor] = depth + 1
-                    result.append((neighbor, edge.edge_type.value, depth + 1))
+                    edge_type = getattr(edge, "edge_type", None) or getattr(edge, "type", None)
+                    result.append((neighbor, edge_type.value if hasattr(edge_type, "value") else str(edge_type), depth + 1))
                     queue.append(neighbor)
         return result
 
