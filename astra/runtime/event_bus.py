@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Callable, Any
+from collections import defaultdict
+
+
+@dataclass
+class RuntimeEvent:
+    event_type: str
+    payload: Any
+    source: str = ""
+    span_id: str = ""
+    tags: dict[str, str] = field(default_factory=dict)
+
+
+class EventBus:
+    """Pub/sub event bus for runtime events."""
+
+    def __init__(self) -> None:
+        self._subscribers: dict[str, list[Callable[[RuntimeEvent], None]]] = defaultdict(list)
+        self._event_log: list[RuntimeEvent] = []
+
+    def subscribe(self, event_type: str, handler: Callable[[RuntimeEvent], None]) -> None:
+        self._subscribers[event_type].append(handler)
+
+    def unsubscribe(self, event_type: str, handler: Callable[[RuntimeEvent], None]) -> None:
+        self._subscribers[event_type] = [h for h in self._subscribers[event_type] if h is not handler]
+
+    def emit(self, event: RuntimeEvent) -> None:
+        self._event_log.append(event)
+        for handler in self._subscribers.get(event.event_type, ()):
+            try:
+                handler(event)
+            except Exception:
+                pass
+
+    def log(self) -> list[RuntimeEvent]:
+        return list(self._event_log)
+
+    def flush(self) -> None:
+        self._event_log.clear()
