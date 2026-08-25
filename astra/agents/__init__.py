@@ -1,6 +1,6 @@
 from astra.agents.adapter import AgentAdapter, AgentAdapterLayer
 from astra.agents.models import AgentRequest, AgentResponse, ExecutionStatus, ProviderCapabilities, ToolCapability
-from astra.agents.providers import BaseAgentProvider, CodexProvider, GenericProvider
+from astra.agents.providers import BaseAgentProvider, CodexProvider, GenericProvider, ManualProvider
 
 __all__ = [
     "AgentAdapter",
@@ -13,4 +13,5 @@ __all__ = [
     "BaseAgentProvider",
     "CodexProvider",
     "GenericProvider",
+    "ManualProvider",
 ]

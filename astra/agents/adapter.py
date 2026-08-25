@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, Protocol, Sequence
 
-from astra.ir.models import IREdge, IRNode, IRContextPack
+from astra.ir.models import IRContextPack
 from astra.agents.models import AgentRequest, AgentResponse, ExecutionStatus
 from astra.agents.providers import BaseAgentProvider, GenericProvider
 from astra.core.logger import get_logger
@@ -26,6 +26,37 @@ class AgentAdapter(Protocol):
     ) -> AgentResponse: ...
 
 
+_PROVIDER_NAMES = ("generic", "codex", "manual")
+
+
+def build_providers_from_config(config=None) -> list[BaseAgentProvider]:
+    """Build the provider list from config `agent.providers` (default: generic).
+
+    Providers are only registered if actually usable (e.g. codex requires the
+    CLI binary on PATH).
+    """
+    from astra.agents.providers import CodexProvider, ManualProvider
+
+    enabled = ["generic"]
+    if config is not None:
+        try:
+            configured = config.get("agent.providers")
+            if isinstance(configured, (list, tuple)) and configured:
+                enabled = [str(p).strip().lower() for p in configured]
+        except Exception:
+            pass
+
+    providers: list[BaseAgentProvider] = []
+    for name in enabled:
+        if name == "generic":
+            providers.append(GenericProvider())
+        elif name == "codex" and CodexProvider.is_available():
+            providers.append(CodexProvider())
+        elif name == "manual":
+            providers.append(ManualProvider())
+    return providers or [GenericProvider()]
+
+
 class AgentAdapterLayer:
     """Unified agent-execution interface.
 
@@ -35,8 +66,12 @@ class AgentAdapterLayer:
     def __init__(
         self,
         providers: Optional[Sequence[BaseAgentProvider]] = None,
+        config=None,
     ) -> None:
-        self._providers: list[BaseAgentProvider] = list(providers) if providers else [GenericProvider()]
+        if providers:
+            self._providers: list[BaseAgentProvider] = list(providers)
+        else:
+            self._providers = build_providers_from_config(config)
         self._fallback = GenericProvider()
 
     def register(self, provider: BaseAgentProvider) -> None:
@@ -127,9 +162,4 @@ class AgentAdapterLayer:
                 confidence=0.7,
             )
 
-        return AgentResponse(
-            content=task_description,
-            execution_status=ExecutionStatus.PENDING,
-            provider=provider.name,
-            confidence=0.5,
-        )
+        return provider.execute(request)

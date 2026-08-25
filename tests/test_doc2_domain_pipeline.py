@@ -25,7 +25,7 @@ class Doc2DomainPipelineTests(unittest.TestCase):
             self.assertIsNotNone(system["phase5_runtime_orchestrator"])
             self.assertTrue(system["phase6_dashboard"].events)
             self.assertIsNotNone(system["phase7_agent_adapter"])
-            self.assertEqual(system["phase7_agent_adapter"].execution_status.value, "pending")
+            self.assertEqual(system["phase7_agent_adapter"].execution_status.value, "completed")
 
     def test_parser_and_graph_consume_repository_index_only(self):
         with tempfile.TemporaryDirectory() as root:
@@ -46,7 +46,7 @@ class Doc2DomainPipelineTests(unittest.TestCase):
             # Use the already-executed adapter result from the pipeline
             agent_result = system["phase7_agent_adapter"]
 
-            self.assertEqual(agent_result.execution_status.value, "pending")
+            self.assertEqual(agent_result.execution_status.value, "completed")
             self.assertIn("analyze main", agent_result.content)
 
     def _write(self, root, rel_path, content):

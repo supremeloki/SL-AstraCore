@@ -61,7 +61,7 @@ class AstraCore:
 
         if context_pack:
             ir_pack = legacy_pack_to_ir(context_pack)
-            agent_result = AgentAdapterLayer().execute(task, ir_pack)
+            agent_result = AgentAdapterLayer(config=self.config).execute(task, ir_pack)
             result["phase7_agent_adapter"] = agent_result
 
         logger.info("SL-AstraCore domain pipeline ready")
