@@ -70,24 +70,67 @@ def get_parser_registry() -> ParserRegistry:
 
 
 _TREE_SITTER_LANGUAGES = ("go", "rust", "java", "c", "cpp", "csharp", "ruby", "php")
+_TREE_SITTER_JSTS_EXTENSIONS = (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs")
+
+
+class _JSTSTreeSitterAdapter:
+    """Wraps TreeSitterAdapter to cover JS/TS extensions with per-file language."""
+
+    def __init__(self) -> None:
+        from astra.parser.tree_sitter_adapter import TreeSitterAdapter
+        self._js = TreeSitterAdapter("javascript")
+        self._ts = TreeSitterAdapter("typescript")
+        self._tsx = TreeSitterAdapter("tsx") if self._has_parser("tsx") else None
+
+    @staticmethod
+    def _has_parser(language: str) -> bool:
+        try:
+            from tree_sitter_language_pack import get_parser
+            return get_parser(language) is not None
+        except Exception:
+            return False
+
+    language = "javascript"
+
+    @property
+    def file_extensions(self) -> tuple[str, ...]:
+        return _TREE_SITTER_JSTS_EXTENSIONS
+
+    def can_parse(self, file_path: str) -> bool:
+        return file_path.endswith(_TREE_SITTER_JSTS_EXTENSIONS)
+
+    def parse(self, file_path: str, content: str):
+        if file_path.endswith(".tsx"):
+            if self._tsx is not None:
+                return self._tsx.parse(file_path, content)
+            return self._ts.parse(file_path, content)
+        if file_path.endswith((".ts",)):
+            return self._ts.parse(file_path, content)
+        return self._js.parse(file_path, content)
 
 
 def build_default_parser_registry() -> ParserRegistry:
-    from astra.parser.jsts_adapter import JSTSParserAdapter
     from astra.parser.markdown_adapter import MarkdownParserAdapter
     from astra.parser.python_adapter import PythonParserAdapter
     from astra.parser.tree_sitter_adapter import TreeSitterAdapter
 
     registry = ParserRegistry()
     registry.register(PythonParserAdapter())
-    registry.register(JSTSParserAdapter())
     registry.register(MarkdownParserAdapter())
+    try:
+        if _JSTSTreeSitterAdapter._has_parser("javascript"):
+            registry.register(_JSTSTreeSitterAdapter())
+        else:
+            from astra.parser.jsts_adapter import JSTSParserAdapter
+            registry.register(JSTSParserAdapter())
+    except Exception:
+        from astra.parser.jsts_adapter import JSTSParserAdapter
+        registry.register(JSTSParserAdapter())
     for language in _TREE_SITTER_LANGUAGES:
-        adapter = TreeSitterAdapter(language)
         try:
             from tree_sitter_language_pack import get_parser
             if get_parser(language) is not None:
-                registry.register(adapter)
+                registry.register(TreeSitterAdapter(language))
         except Exception:
             pass
     return registry

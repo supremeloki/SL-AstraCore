@@ -63,7 +63,7 @@ def detect_naming_conventions(files: Sequence[IRFileNode]) -> Sequence[PatternMa
         matching = []
 
         for node in files:
-            stem = node.file_path.split("/")[-1].split(".")[0]
+            stem = node.file_path.replace("\\", "/").split("/")[-1].split(".")[0]
             if regex.match(stem):
                 matching.append(node.file_path)
 

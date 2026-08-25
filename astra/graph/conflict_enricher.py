@@ -21,7 +21,7 @@ def detect_naming_conflicts(files: Sequence[IRFileNode]) -> Sequence[ConflictMat
     name_map: dict[str, list[IRFileNode]] = defaultdict(list)
 
     for node in files:
-        stem = node.file_path.split("/")[-1]
+        stem = node.file_path.replace("\\", "/").split("/")[-1]
         base = stem.split(".")[0]
         name_map[base.lower()].append(node)
 

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence, Optional
 
+from astra.graph.enrichment import enrich_graph
 from astra.graph.mutator import GraphMutator
 from astra.ir.models import (
     ContextEdgeRef,
@@ -14,8 +14,6 @@ from astra.ir.models import (
     EdgeType,
     IRContextPack,
     IREdge,
-    IRFileNode,
-    IRFileParseResult,
     IRNode,
     NodeType,
 )
@@ -161,6 +159,21 @@ class RuntimeOrchestrator:
                 for edge in dep_edges
                 if edge.from_node in path_to_node_id and edge.to_node in path_to_node_id
             ]
+
+            # 5b. Enrichment: pattern + conflict nodes/edges (best-effort).
+            file_nodes_for_enrichment = [
+                result.file_node for result in parse_results if result.file_node
+            ]
+            extra_nodes, extra_edges = enrich_graph(file_nodes_for_enrichment)
+            fresh_file_ids = {n.id for n in nodes_to_upsert}
+            extra_edges = [
+                e for e in extra_edges
+                if e.from_node and e.to_node and (
+                    not e.to_node.startswith("file:") or e.to_node in fresh_file_ids
+                )
+            ]
+            nodes_to_upsert.extend(extra_nodes)
+            edges_to_upsert.extend(extra_edges)
 
             # 6. Drop nodes for files removed since last index (cascades edges),
             # then persist everything in one atomic batch.
