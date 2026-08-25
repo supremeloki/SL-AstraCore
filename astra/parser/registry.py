@@ -69,13 +69,25 @@ def get_parser_registry() -> ParserRegistry:
     return _global_registry
 
 
+_TREE_SITTER_LANGUAGES = ("go", "rust", "java", "c", "cpp", "csharp", "ruby", "php")
+
+
 def build_default_parser_registry() -> ParserRegistry:
     from astra.parser.jsts_adapter import JSTSParserAdapter
     from astra.parser.markdown_adapter import MarkdownParserAdapter
     from astra.parser.python_adapter import PythonParserAdapter
+    from astra.parser.tree_sitter_adapter import TreeSitterAdapter
 
     registry = ParserRegistry()
     registry.register(PythonParserAdapter())
     registry.register(JSTSParserAdapter())
     registry.register(MarkdownParserAdapter())
+    for language in _TREE_SITTER_LANGUAGES:
+        adapter = TreeSitterAdapter(language)
+        try:
+            from tree_sitter_language_pack import get_parser
+            if get_parser(language) is not None:
+                registry.register(adapter)
+        except Exception:
+            pass
     return registry
