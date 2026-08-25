@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Callable, Any
 from collections import defaultdict
 
@@ -12,6 +13,7 @@ class RuntimeEvent:
     source: str = ""
     span_id: str = ""
     tags: dict[str, str] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class EventBus:

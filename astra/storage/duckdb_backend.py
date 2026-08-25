@@ -31,6 +31,18 @@ CREATE TABLE IF NOT EXISTS graph_edges (
 """
 
 
+def _dedupe_by_key(rows: list[list[object]], columns: list[str], keys: list[str]) -> list[list[object]]:
+    # Duplicate keys within one batch crash the set-based upsert (DELETE then
+    # INSERT violates the PK); keep last occurrence, matching INSERT OR REPLACE.
+    if len(rows) < 2:
+        return rows
+    key_idx = [columns.index(k) for k in keys]
+    dedup: dict[tuple, list[object]] = {}
+    for r in rows:
+        dedup[tuple(r[j] for j in key_idx)] = r
+    return list(dedup.values())
+
+
 def _node_from_row(row) -> IRNode:
     return IRNode(
         id=row[0],
@@ -164,9 +176,10 @@ class DuckDBBackend:
         return [_node_from_row(r) for r in rows]
 
     def search_nodes_by_name(self, name_substring: str) -> Sequence[IRNode]:
+        escaped = name_substring.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         rows = self.conn.execute(
-            "SELECT * FROM graph_nodes WHERE name LIKE ?",
-            [f"%{name_substring}%"],
+            "SELECT * FROM graph_nodes WHERE name LIKE ? ESCAPE '\\'",
+            [f"%{escaped}%"],
         ).fetchall()
         return [_node_from_row(r) for r in rows]
 
@@ -220,6 +233,7 @@ class DuckDBBackend:
 
         _warm_list_cast(self.conn)
         columns = self._table_columns(table)
+        rows = _dedupe_by_key(rows, columns, keys)
         column_arrays = [[r[i] for r in rows] for i in range(len(columns))]
         unnest_select = ", ".join(f"unnest(?::VARCHAR[]) AS {col}" for col in columns)
 

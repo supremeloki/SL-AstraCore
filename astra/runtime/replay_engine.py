@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable
 
 
@@ -23,7 +24,12 @@ class ReplayEngine:
         self._events: list[ReplayEvent] = []
 
     def load_journal(self) -> list[ReplayEvent]:
-        """Load events from journal file."""
+        """Load events from journal file.
+
+        Accepts both bare replay lines ({event_type, payload, timestamp,
+        sequence}) and ExecutionJournal entries ({type, data, timestamp,
+        sequence}).
+        """
         self._events = []
         if not os.path.exists(self._journal_path):
             return self._events
@@ -34,10 +40,16 @@ class ReplayEngine:
                 if not line:
                     continue
                 data = json.loads(line)
+                ts = data.get("timestamp", 0.0)
+                if isinstance(ts, str):
+                    try:
+                        ts = datetime.fromisoformat(ts).timestamp()
+                    except ValueError:
+                        ts = 0.0
                 self._events.append(ReplayEvent(
-                    event_type=data.get("event_type", ""),
-                    payload=data.get("payload", {}),
-                    timestamp=data.get("timestamp", 0.0),
+                    event_type=data.get("event_type") or data.get("type", ""),
+                    payload=data.get("payload", data.get("data", {})),
+                    timestamp=float(ts),
                     sequence=data.get("sequence", 0),
                 ))
         return self._events

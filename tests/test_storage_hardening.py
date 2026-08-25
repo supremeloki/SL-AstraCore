@@ -140,3 +140,80 @@ def test_duckdb_sqlite_parity():
         finally:
             if os.path.exists(db_path):
                 os.remove(db_path)
+
+
+# ── Hardened behaviors ──────────────────────────────────────────────
+
+
+def test_duckdb_duplicate_key_batch_upsert():
+    provider = StorageProvider(backend="duckdb", db_path=":memory:")
+    storage = provider.create()
+    storage.connect()
+    try:
+        storage.add_nodes([
+            IRNode(id="n1", type=NodeType.FILE, name="first", source="t"),
+            IRNode(id="n1", type=NodeType.FILE, name="second", source="t"),
+            IRNode(id="n2", type=NodeType.FILE, name="other", source="t"),
+        ])
+        assert storage.node_count() == 2
+        assert storage.get_node("n1").name == "second"  # last occurrence wins
+
+        storage.add_edges([
+            IREdge(from_node="n1", to_node="n2", type=EdgeType.IMPORTS),
+            IREdge(from_node="n1", to_node="n2", type=EdgeType.IMPORTS),
+        ])
+        assert storage.edge_count() == 1
+    finally:
+        storage.close()
+
+
+def test_sqlite_metadata_roundtrip_reopen_equality():
+    with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as f:
+        db_path = f.name
+    node = IRNode(
+        id="n1", type=NodeType.CLASS, name="Greeter", source="t",
+        metadata={"bases": ("object",), "nested": {"tags": ("a", "b")}},
+    )
+    edge = IREdge(from_node="n1", to_node="n1", type=EdgeType.CALLS,
+                  metadata={"sites": ("line10",)})
+    from astra.graph.mutator import GraphMutator
+
+    try:
+        first = StorageProvider(backend="sqlite", db_path=db_path).create()
+        first.connect()
+        first.add_node(node)
+        first.add_edge(edge)
+        first.close()
+
+        second = StorageProvider(backend="sqlite", db_path=db_path).create()
+        second.connect()
+        assert second.get_node("n1") == node
+        assert list(second.get_edges())[0] == edge
+
+        result = GraphMutator(second).apply_node_upsert(node)
+        assert result.added_nodes == 0
+        assert result.updated_nodes == 0
+        second.close()
+    finally:
+        if os.path.exists(db_path):
+            os.remove(db_path)
+
+
+def test_search_nodes_by_name_escapes_like_wildcards():
+    for backend in ("duckdb", "sqlite"):
+        provider = StorageProvider(backend=backend, db_path=":memory:")
+        storage = provider.create()
+        storage.connect()
+        try:
+            storage.add_nodes([
+                IRNode(id="a", type=NodeType.FILE, name="100%_done", source="t"),
+                IRNode(id="b", type=NodeType.FILE, name="100xdone", source="t"),
+                IRNode(id="c", type=NodeType.FILE, name="plain", source="t"),
+            ])
+            hits = {n.id for n in storage.search_nodes_by_name("%")}
+            assert hits == {"a"}
+            hits = {n.id for n in storage.search_nodes_by_name("_")}
+            assert hits == {"a"}
+            assert len(storage.search_nodes_by_name("100%_done")) == 1
+        finally:
+            storage.close()

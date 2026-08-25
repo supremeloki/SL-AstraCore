@@ -30,6 +30,16 @@ CREATE TABLE IF NOT EXISTS graph_edges (
 """
 
 
+def _normalize_meta(meta):
+    # JSON has no tuples; canonicalize sequences to tuples on both write and
+    # read so nodes compare equal across reopen and mutator diffing converges.
+    if isinstance(meta, (list, tuple)):
+        return tuple(_normalize_meta(v) for v in meta)
+    if isinstance(meta, dict):
+        return {k: _normalize_meta(v) for k, v in meta.items()}
+    return meta
+
+
 def _node_from_row(row) -> IRNode:
     return IRNode(
         id=row[0],
@@ -37,7 +47,7 @@ def _node_from_row(row) -> IRNode:
         name=row[2],
         source=row[3],
         confidence=row[4] or 0.0,
-        metadata=json.loads(row[5]) if row[5] else {},
+        metadata=_normalize_meta(json.loads(row[5])) if row[5] else {},
     )
 
 
@@ -48,7 +58,7 @@ def _edge_from_row(row) -> IREdge:
         type=EdgeType[row[2]],
         weight=row[3] or 1.0,
         confidence=row[4] or 0.0,
-        metadata=json.loads(row[5]) if row[5] else {},
+        metadata=_normalize_meta(json.loads(row[5])) if row[5] else {},
     )
 
 
@@ -83,7 +93,8 @@ class SQLiteBackend:
         self.conn.execute(
             "INSERT OR REPLACE INTO graph_nodes VALUES (?, ?, ?, ?, ?, ?)",
             [node.id, node.type.name, node.name, node.source,
-             node.confidence, json.dumps(node.metadata, default=str)],
+             node.confidence,
+             json.dumps(_normalize_meta(node.metadata), default=str)],
         )
 
     def get_node(self, node_id: str) -> Optional[IRNode]:
@@ -108,7 +119,8 @@ class SQLiteBackend:
         self.conn.execute(
             "INSERT OR REPLACE INTO graph_edges VALUES (?, ?, ?, ?, ?, ?)",
             [edge.from_node, edge.to_node, edge.type.name,
-             edge.weight, edge.confidence, json.dumps(edge.metadata, default=str)],
+             edge.weight, edge.confidence,
+             json.dumps(_normalize_meta(edge.metadata), default=str)],
         )
 
     def get_edges(
@@ -155,9 +167,10 @@ class SQLiteBackend:
         return [_node_from_row(r) for r in cur.fetchall()]
 
     def search_nodes_by_name(self, name_substring: str) -> Sequence[IRNode]:
+        escaped = name_substring.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         cur = self.conn.execute(
-            "SELECT * FROM graph_nodes WHERE name LIKE ?",
-            [f"%{name_substring}%"],
+            "SELECT * FROM graph_nodes WHERE name LIKE ? ESCAPE '\\'",
+            [f"%{escaped}%"],
         )
         return [_node_from_row(r) for r in cur.fetchall()]
 
@@ -184,7 +197,7 @@ class SQLiteBackend:
         self.conn.executemany(
             "INSERT OR REPLACE INTO graph_nodes VALUES (?, ?, ?, ?, ?, ?)",
             [(n.id, n.type.name, n.name, n.source,
-              n.confidence, json.dumps(n.metadata, default=str))
+              n.confidence, json.dumps(_normalize_meta(n.metadata), default=str))
              for n in nodes],
         )
 
@@ -194,7 +207,7 @@ class SQLiteBackend:
         self.conn.executemany(
             "INSERT OR REPLACE INTO graph_edges VALUES (?, ?, ?, ?, ?, ?)",
             [(e.from_node, e.to_node, e.type.name,
-              e.weight, e.confidence, json.dumps(e.metadata, default=str))
+              e.weight, e.confidence, json.dumps(_normalize_meta(e.metadata), default=str))
              for e in edges],
         )
 

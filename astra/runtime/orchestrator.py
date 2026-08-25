@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -61,9 +62,11 @@ class RuntimeOrchestrator:
         if root_path in self._repos:
             return self._repos[root_path]
 
+        # Deterministic per-repo DB path: stable across processes (hash() is salted).
+        digest = hashlib.sha256(root_path.encode("utf-8")).hexdigest()[:16]
         db_path = os.path.join(
             os.path.dirname(self._metadata_db_path),
-            f"{name}_{abs(hash(root_path))}.db",
+            f"{name}_{digest}.db",
         )
 
         record = RepoRecord(
@@ -91,6 +94,12 @@ class RuntimeOrchestrator:
 
         record.status = RepoStatus.INDEXING
 
+        if not Path(root_path).exists():
+            record.status = RepoStatus.FAILED
+            record.error = f"Repository root does not exist: {root_path}"
+            return record
+
+        storage = None
         try:
             # 1. Scan repo
             files = self._scan_repo_files(root_path, file_extensions)
@@ -114,11 +123,12 @@ class RuntimeOrchestrator:
             storage.connect()
             mutator = GraphMutator(storage)
 
-            # 4. Upsert file nodes
+            # 4. Normalize file nodes and keep path->id map for edge endpoints
+            nodes_to_upsert = []
+            path_to_node_id = {}
             for result in parse_results:
                 if result.file_node:
                     file_node = result.file_node
-                    # Normalize to canonical file id
                     canonical_node = IRNode(
                         id=file_node.id,
                         type=file_node.type,
@@ -133,45 +143,50 @@ class RuntimeOrchestrator:
                             "role": file_node.role.name if hasattr(file_node.role, "name") else str(file_node.role),
                         },
                     )
-                    mutator.apply_node_upsert(canonical_node)
+                    nodes_to_upsert.append(canonical_node)
+                    path_to_node_id[file_node.file_path] = file_node.id
 
-            # 5. Resolve imports and create edges.
-            # Resolver works in root-relative space; map back to canonical file: node IDs.
+            # 5. Resolve imports; resolver works in root-relative space, map
+            # back to canonical file: node IDs.
             _, dep_edges = resolve_imports_into_edges(parse_results)
-
-            path_to_node_id = {}
-            for result in parse_results:
-                if result.file_node:
-                    path_to_node_id[result.file_node.file_path] = result.file_node.id
-
-            for edge in dep_edges:
-                src_id = path_to_node_id.get(edge.from_node)
-                dst_id = path_to_node_id.get(edge.to_node)
-                if src_id is None or dst_id is None:
-                    continue
-                mutator.apply_edge_upsert(
-                    IREdge(
-                        from_node=src_id,
-                        to_node=dst_id,
-                        type=edge.type,
-                        weight=edge.weight,
-                        confidence=edge.confidence,
-                        metadata=edge.metadata,
-                    )
+            edges_to_upsert = [
+                IREdge(
+                    from_node=path_to_node_id[edge.from_node],
+                    to_node=path_to_node_id[edge.to_node],
+                    type=edge.type,
+                    weight=edge.weight,
+                    confidence=edge.confidence,
+                    metadata=edge.metadata,
                 )
+                for edge in dep_edges
+                if edge.from_node in path_to_node_id and edge.to_node in path_to_node_id
+            ]
 
-            # 6. Update record
-            record.file_count = len(files)
+            # 6. Drop nodes for files removed since last index (cascades edges),
+            # then persist everything in one atomic batch.
+            fresh_ids = {n.id for n in nodes_to_upsert}
+            stale_ids = sorted(storage.get_node_ids() - fresh_ids)
+
+            mutator.apply_batch(
+                nodes_to_delete=stale_ids,
+                nodes_to_upsert=nodes_to_upsert,
+                edges_to_upsert=edges_to_upsert,
+            )
+
+            # 7. Update record
+            record.file_count = len(parse_results)
             record.node_count = storage.node_count()
             record.edge_count = storage.edge_count()
             record.last_indexed = datetime.now(timezone.utc).isoformat()
             record.status = RepoStatus.ACTIVE
-
-            storage.close()
+            record.error = None
 
         except Exception as exc:
             record.status = RepoStatus.FAILED
             record.error = str(exc)
+        finally:
+            if storage is not None:
+                storage.close()
 
         return record
 
@@ -225,12 +240,18 @@ class RuntimeOrchestrator:
 
         kg = KnowledgeGraph()
         for n in storage.get_all_nodes():
+            props = dict(n.metadata or {})
+            file_path = getattr(n, "file_path", "") or props.get("file_path", "")
+            if n.type == NodeType.FILE and not file_path:
+                file_path = n.id.removeprefix("file:")
+            if file_path:
+                props["file_path"] = file_path
             gn = GraphNodeModel(
                 id=n.id,
                 label=n.name or n.id,
                 node_type=node_type_from_ir(n.type),
                 confidence=n.confidence,
-                properties=dict(n.metadata or {}),
+                properties=props,
             )
             kg.nodes.append(gn)
             kg.node_index[gn.id] = gn
@@ -247,7 +268,7 @@ class RuntimeOrchestrator:
                 node_id=n["id"],
                 node_type=node_type_from_ir(kg.node_index[n["id"]].node_type) if n["id"] in kg.node_index else NodeType.FILE,
                 name=n.get("label", ""),
-                file_path=n.get("file_path", ""),
+                file_path=(n.get("file_path") or n["id"].removeprefix("file:")) if n["id"].startswith("file:") else n.get("file_path", ""),
                 relevance_score=float(n.get("relevance", 1.0)),
             )
             for n in _pack.relevant_nodes
@@ -273,13 +294,18 @@ class RuntimeOrchestrator:
             required_files=tuple(_pack.required_files),
             dependency_summary=tuple(str(d) for d in _pack.critical_dependencies[:20]),
             hidden_risks=tuple(_risks.medium_risk_nodes[:10]),
-            total_tokens=min(_pack.token_estimate, max_tokens) if max_tokens else _pack.token_estimate,
+            total_tokens=_pack.token_estimate,
             token_budget=max_tokens or 0,
             confidence=_analysis.confidence,
         )
 
     def get_repo(self, root_path: str) -> Optional[RepoRecord]:
         return self._repos.get(root_path)
+
+    def remove_repo(self, root_path: str) -> bool:
+        """Unregister a repo. Returns False if it was never registered."""
+        record = self._repos.pop(root_path, None)
+        return record is not None
 
     def list_repos(self) -> Sequence[RepoRecord]:
         return list(self._repos.values())
@@ -291,7 +317,8 @@ class RuntimeOrchestrator:
     ) -> list[str]:
         """Scan a repo directory for indexable files.
 
-        Respects .gitignore rules via simple skip logic.
+        Respects built-in ignores plus simple root/.gitignore rules
+        (dir names, *.ext globs, leading paths).
         """
         root = Path(root_path)
         ignore_patterns = {
@@ -300,18 +327,28 @@ class RuntimeOrchestrator:
             ".egg-info", ".tox", ".mypy_cache",
             ".pytest_cache", "*.pyc", "*.pyo",
         }
+        gitignore_rules = [r.replace("\\", "/").rstrip("/") for r in self._parse_gitignore(root / ".gitignore")]
+        ignore_names = ignore_patterns | {r for r in gitignore_rules if "/" not in r}
+        ignore_suffixes = tuple(
+            s[1:] for s in list(ignore_names) + gitignore_rules if s.startswith("*")
+        )
+        # Leading-path rules like "src/generated" match as rel-prefix.
+        ignore_prefixes = tuple(r + "/" for r in gitignore_rules if "/" in r)
 
         files = []
         for path in root.rglob("*"):
             if path.is_dir():
                 continue
             rel = path.relative_to(root)
+            rel_str = str(rel).replace("\\", "/")
             parts = rel.parts
             if any(p.startswith(".") and p not in (".gitignore",) for p in parts):
                 continue
-            if any(p in ignore_patterns for p in parts):
+            if any(p in ignore_names for p in parts):
                 continue
-            if any(str(rel).endswith(s.lstrip("*")) for s in ignore_patterns if s.startswith("*")):
+            if ignore_suffixes and rel_str.endswith(ignore_suffixes):
+                continue
+            if any(rel_str.startswith(prefix) for prefix in ignore_prefixes):
                 continue
             if file_extensions:
                 if not any(str(path).endswith(ext) for ext in file_extensions):
@@ -319,6 +356,22 @@ class RuntimeOrchestrator:
             files.append(str(path))
 
         return sorted(files)
+
+    @staticmethod
+    def _parse_gitignore(gitignore_path: Path) -> list[str]:
+        """Extract simple skip rules from a .gitignore file."""
+        if not gitignore_path.is_file():
+            return []
+        rules = []
+        try:
+            for line in gitignore_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or line.startswith("!"):
+                    continue
+                rules.append(line.lstrip("/"))
+        except OSError:
+            return []
+        return rules
 
     def _get_active_record(self, root_path: str) -> RepoRecord:
         record = self._repos.get(root_path)

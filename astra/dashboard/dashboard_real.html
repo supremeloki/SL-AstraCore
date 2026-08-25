@@ -969,7 +969,7 @@ async function loadContext(){
 `;
     document.getElementById('ctxFiles').innerHTML=(d.nodes||[]).slice(0,12).map(n=>{
       const c=n.type==='Class'?'#a855f7':n.type==='Function'?'#3b82f6':'#06b6d4';
-      return `<div class="topfile"><span class="tf-name" title="${n.name}">${n.name}</span><div class="tf-bar"><div class="tf-fill" style="width:${(d.score*100).toFixed(0)}%;background:${c}"></div></div><span class="tf-score" style="color:${c}">${(d.score*100).toFixed(0)}%</span></div>`;
+      return `<div class="topfile"><span class="tf-name" title="${n.file_path||n.name}">${n.name}</span><div class="tf-bar"><div class="tf-fill" style="width:${(d.score*100).toFixed(0)}%;background:${c}"></div></div><span class="tf-score" style="color:${c}">${(d.score*100).toFixed(0)}%</span></div>`;
     }).join('');
   }catch(e){document.getElementById('ctxStats').style.display='none'}
 }

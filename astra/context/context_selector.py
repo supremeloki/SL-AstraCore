@@ -64,6 +64,9 @@ class ContextSelector:
         for nid in top:
             node = self._gq.get_node(nid)
             if node:
+                file_path = node.properties.get("file_path", "")
+                if not file_path and node.node_type == NodeType.FILE:
+                    file_path = nid.removeprefix("file:")
                 relevant_nodes.append({
                     "id": nid,
                     "label": node.label,
@@ -71,6 +74,7 @@ class ContextSelector:
                     "confidence": node.confidence,
                     "layer": node.layer,
                     "risk": node.properties.get("risk", "low"),
+                    "file_path": file_path,
                 })
 
         pack = ContextPack(
@@ -85,6 +89,7 @@ class ContextSelector:
             hidden_risks=hidden,
             confidence=task_analysis.confidence,
             task_type=task_analysis.task_type.value,
+            metadata={"seed_ids": set(seeds)},
         )
         return pack, deps, risks
 

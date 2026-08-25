@@ -43,8 +43,13 @@ class GraphMutator:
         if existing is None:
             return GraphMutationResult()
             
-        edges_to_remove = self._storage.get_edges(from_node=node_id)
-        edges_to_remove += self._storage.get_edges(to_node=node_id)
+        edges_from = self._storage.get_edges(from_node=node_id)
+        edges_to = self._storage.get_edges(to_node=node_id)
+        # A self-loop appears in both directions; count/delete it once.
+        seen = {(e.from_node, e.to_node, e.type) for e in edges_from}
+        edges_to_remove = list(edges_from) + [
+            e for e in edges_to if (e.from_node, e.to_node, e.type) not in seen
+        ]
         
         self._storage.delete_node(node_id)
         

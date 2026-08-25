@@ -42,9 +42,9 @@ class ContextEngine:
 
         self._lifecycle.advance("semantic_tagging")
         pack, deps, risks = self._selector.select(task_analysis, strategy)
+        self._enforce_token_budget(pack)
 
         self._lifecycle.advance("index_output")
-        pack.token_estimate = self._estimate_tokens(pack)
         self._validate(pack)
 
         self._lifecycle.advance("complete")
@@ -59,15 +59,43 @@ class ContextEngine:
 
         return task_analysis, pack, deps, risks
 
+    def _enforce_token_budget(self, pack):
+        budget = self._token_budget
+        # Budget state is per-pack: without this reset a long-lived engine
+        # instance accumulates used across calls until packs silently starve.
+        budget.reset()
+
+        def node_cost(n):
+            text = f"{n['id']} {n['label']} {n['type']}"
+            return budget.estimate(text)
+
+        seeds = set(pack.metadata.get("seed_ids", ()))
+        kept = []
+        dropped = False
+        # Seeds are reserved unconditionally; non-seeds fill the remaining budget.
+        for n in pack.relevant_nodes:
+            if not dropped and (n["id"] in seeds or budget.can_fit(f"{n['id']} {n['label']} {n['type']}")):
+                budget.reserve(n["id"], f"{n['id']} {n['label']} {n['type']}", force=n["id"] in seeds)
+                kept.append(n)
+            else:
+                dropped = True
+        if dropped:
+            logger.info("Token budget: dropped %d low-relevance node(s)", len(pack.relevant_nodes) - len(kept))
+        pack.relevant_nodes = kept
+        pack.required_files = [f for f in pack.required_files if any(
+            n.get("file_path") == f or f in n.get("file_path", "") for n in kept
+        )] if kept else []
+        pack.token_estimate = sum(node_cost(n) for n in kept)
+
     def _estimate_tokens(self, pack):
         self._token_budget.reset()
         for node in pack.relevant_nodes:
             text = f"{node['id']} {node['label']} {node['type']}"
-            self._token_budget.reserve(node["id"], text)
+            self._token_budget.reserve(node["id"], text, force=True)
         for f in pack.required_files:
-            self._token_budget.reserve(f, f)
+            self._token_budget.reserve(f, f, force=True)
         for c in pack.critical_dependencies:
-            self._token_budget.reserve(str(c), str(c))
+            self._token_budget.reserve(str(c), str(c), force=True)
         return self._token_budget.used
 
     def _validate(self, pack):

@@ -16,6 +16,17 @@ from astra.ir.models import (
 )
 
 
+def _decorator_names(node):
+    names = []
+    for dec in node.decorator_list:
+        target = dec.func if isinstance(dec, ast.Call) else dec
+        if isinstance(target, ast.Attribute):
+            names.append(target.attr)
+        elif isinstance(target, ast.Name):
+            names.append(target.id)
+    return names
+
+
 class PythonParserAdapter:
     language = "python"
     file_extensions = (".py",)
@@ -32,7 +43,8 @@ class PythonParserAdapter:
             tree = ast.parse(content)
 
             for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    decorators = _decorator_names(node)
                     symbols.append(
                         IRSymbol(
                             name=node.name,
@@ -41,6 +53,7 @@ class PythonParserAdapter:
                             line_start=node.lineno,
                             line_end=getattr(node, "end_lineno", node.lineno),
                             is_private=node.name.startswith("_"),
+                            metadata={"decorators": decorators} if decorators else {},
                         )
                     )
 

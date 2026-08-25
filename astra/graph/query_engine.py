@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
@@ -85,8 +86,6 @@ class GraphQueryEngine:
 
     def bfs(self, seed_node_id: str, max_depth: int = 2) -> QueryResult:
         """Breadth-first traversal from a seed node."""
-        from collections import deque
-
         visited: set[str] = set()
         queue: deque[tuple[str, int]] = deque()
         queue.append((seed_node_id, 0))
@@ -117,6 +116,55 @@ class GraphQueryEngine:
             edges=tuple(result_edges),
             count=len(result_nodes),
         )
+
+    def shortest_path(self, src: str, dst: str) -> Optional[list[str]]:
+        """Shortest directed path src -> dst via BFS parent tracking."""
+        if src == dst:
+            return [src]
+
+        parents: dict[str, str] = {}
+        visited = {src}
+        queue: deque[str] = deque([src])
+
+        while queue:
+            current = queue.popleft()
+            for e in self._storage.get_edges(from_node=current):
+                nxt = e.to_node
+                if nxt in visited:
+                    continue
+                visited.add(nxt)
+                parents[nxt] = current
+                if nxt == dst:
+                    path = [dst]
+                    while path[-1] != src:
+                        path.append(parents[path[-1]])
+                    return path[::-1]
+                queue.append(nxt)
+        return None
+
+    def extract_subgraph(self, node_ids: Sequence[str]) -> QueryResult:
+        """Induced subgraph over node_ids: nodes plus edges with both endpoints inside."""
+        keep = set(node_ids)
+        nodes = [self._storage.get_node(nid) for nid in keep]
+        nodes = [n for n in nodes if n]
+
+        edges = []
+        for nid in keep:
+            for e in self._storage.get_edges(from_node=nid):
+                if e.to_node in keep:
+                    edges.append(e)
+
+        return QueryResult(
+            nodes=tuple(nodes),
+            edges=tuple(edges),
+            count=len(nodes),
+        )
+
+    def impact_analysis(self, node_id: str, depth: int = 3) -> QueryResult:
+        """Downstream BFS capped at depth; excludes the seed itself."""
+        result = self.bfs(node_id, max_depth=depth)
+        nodes = tuple(n for n in result.nodes if n.id != node_id)
+        return QueryResult(nodes=nodes, edges=result.edges, count=len(nodes))
 
     # ── Aggregation ────────────────────────────────────────
 

@@ -32,12 +32,14 @@ _CLASS_RE = re.compile(
 )
 
 _IMPORT_RE = re.compile(
-    r"""import\s+(?:
-        (?:\{[^}]+\}|\w+|\*\s+as\s+\w+)\s+from\s+['"]([^'"]+)['"]  # named/default
+    r"""(?:
+        import\s+(?:[\w$]+\s*,\s*)?(?:\{[^}]*\}|\*\s+as\s+[\w$]+|\w+)?\s*from\s*['"]([^'"]+)['"]
         |
-        \*\s+as\s+\w+\s+from\s+['"]([^'"]+)['"]                      # namespace
+        export\s+(?:\{[^}]*\}|\*(?:\s+as\s+[\w$]+)?)\s*from\s*['"]([^'"]+)['"]
         |
-        ['"]([^'"]+)['"]                                             # side-effect
+        import\s*\(\s*['"`]([^'"`]+)['"`]\s*\)
+        |
+        import\s+['"]([^'"]+)['"]
     )""",
     re.MULTILINE | re.VERBOSE,
 )

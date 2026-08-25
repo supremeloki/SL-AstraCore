@@ -2,13 +2,16 @@
 
 from pathlib import Path
 import asyncio
+import os
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from astra.runtime.orchestrator import RuntimeOrchestrator
 from astra.runtime.metrics import MetricsCollector
 from astra.runtime.event_bus import EventBus, RuntimeEvent
+from astra.runtime.journal import ExecutionJournal
+from astra.runtime.replay_engine import ReplayEngine
 from astra.runtime.health import HealthDiagnostics
 from astra.runtime.telemetry import TelemetryEngine
 from astra.runtime.tracing import Tracer
@@ -31,6 +34,39 @@ _health = HealthDiagnostics()
 _telemetry = TelemetryEngine(service_name="sl-astracore-dashboard")
 _tracer = Tracer()
 
+_EXPLORER_MAX_DEPTH = 12
+_EXPLORER_MAX_ENTRIES = 5000
+
+# Journal for execution mutations (patch applies); replayable via /api/executions/replay.
+_journal = ExecutionJournal(os.path.join(os.path.expanduser("~"), ".astra", "dashboard_journal.jsonl"))
+
+
+def _emit(event_type: str, payload: dict, source: str = "dashboard") -> None:
+    _event_bus.emit(RuntimeEvent(event_type=event_type, payload=payload, source=source))
+
+
+def _registered_roots() -> list[str]:
+    return [r.root_path for r in _orchestrator.list_repos()]
+
+
+def _confine_to_registered_repo(candidate: str) -> str:
+    """Resolve candidate path and refuse anything outside registered repos.
+
+    All file-read/write endpoints must go through this. Prevents arbitrary
+    filesystem read/write from the dashboard.
+    """
+    resolved = str(Path(os.path.abspath(candidate)))
+    for root in _registered_roots():
+        try:
+            Path(resolved).relative_to(root)
+            return resolved
+        except ValueError:
+            continue
+    raise HTTPException(
+        status_code=403,
+        detail=f"path is outside registered repositories: {os.path.basename(resolved)}",
+    )
+
 
 def _get_or_create(path: str):
     """Register repo if new, index if stale."""
@@ -42,7 +78,8 @@ def _get_or_create(path: str):
         rec = None
     if rec is None:
         rec = _orchestrator.register_repo(root, backend="duckdb")
-        _event_bus.emit(RuntimeEvent(event_type="repo_registered", payload={"name": rec.name}))
+        _metrics.increment("repos.added", tags={"name": rec.name})
+        _emit("repo_registered", {"name": rec.name})
     if rec.status.value not in ("active", "indexing"):
         rec = _orchestrator.index_repo(root)
     return rec
@@ -72,9 +109,16 @@ def status():
             }
             for r in repos
         ],
-        "metrics": _metrics.export_snapshots(),
+        "metrics": {
+            "counters": _metrics.counters(),
+            "snapshots": [
+                {"name": s.name, "value": s.value, "tags": s.tags, "timestamp": s.timestamp}
+                for s in _metrics.export_snapshots()[-50:]
+            ],
+        },
         "events": [
-            {"event_type": e.event_type, "payload": e.payload, "source": e.source, "span_id": e.span_id, "tags": e.tags}
+            {"event_type": e.event_type, "payload": e.payload, "source": e.source,
+             "span_id": e.span_id, "tags": e.tags, "timestamp": e.timestamp.isoformat()}
             for e in _event_bus.log()[-20:]
         ],
     }
@@ -94,9 +138,15 @@ async def add_repo(payload: dict):
     path = (payload or {}).get("path", "") if isinstance(payload, dict) else str(payload or "")
     if not path:
         return {"status": "error", "message": "path is required"}
+    if not os.path.isdir(path):
+        raise HTTPException(status_code=400, detail=f"path is not an existing directory: {path}")
     rec = _orchestrator.register_repo(path, backend="duckdb")
-    _event_bus.emit(RuntimeEvent(event_type="repo_registered", payload={"name": rec.name}))
+    _metrics.increment("repos.added", tags={"name": rec.name})
+    _emit("repo_registered", {"name": rec.name})
+
+    _emit("scan_started", {"repo": rec.name, "path": rec.root_path})
     rec = _orchestrator.index_repo(rec.root_path)
+    _emit("graph_updated", {"repo": rec.name, "nodes": rec.node_count, "edges": rec.edge_count})
     return {
         "name": rec.name,
         "path": rec.root_path,
@@ -139,6 +189,8 @@ def context_pack(path: str, query: str, max_tokens: int = 8000):
     root = str(Path(path).resolve())
     _get_or_create(root)
     pack = _orchestrator.query_context(root, seed_node_ids=[], query_intent=query, max_tokens=max_tokens)
+    _metrics.increment("context.queries", tags={"repo": root})
+    _emit("context_built", {"repo": root, "query": query, "nodes": len(pack.nodes)})
     return {
         "query_intent": pack.query_intent,
         "task_summary": pack.task_summary,
@@ -156,6 +208,7 @@ def context_pack(path: str, query: str, max_tokens: int = 8000):
             {"id": n.node_id if hasattr(n, "node_id") else getattr(n, "id", ""),
              "name": getattr(n, "name", ""),
              "type": n.node_type.name if hasattr(getattr(n, "node_type", None), "name") else "File",
+             "file_path": getattr(n, "file_path", ""),
              "relevance": getattr(n, "relevance_score", 1.0)}
             for n in pack.nodes[:30]
         ],
@@ -204,7 +257,7 @@ def graph_node(path: str, node_id: str):
 @app.get("/api/logs")
 def recent_logs(limit: int = 30):
     return [
-        {"timestamp": e.timestamp.isoformat() if hasattr(e, "timestamp") else "",
+        {"timestamp": e.timestamp.isoformat(),
          "event": e.event_type, "data": e.payload}
         for e in _event_bus.log()[-limit:]
     ]
@@ -225,18 +278,30 @@ def explore_repo(path: str):
     """Filesystem-backed tree for a repo."""
     import os
     root = str(Path(path).resolve())
-    def _build(p):
-        if not os.path.isdir(p):
+    def _build(p, depth):
+        if _build.budget[0] <= 0:
             return {"name": os.path.basename(p), "path": p, "children": None}
-        entries = sorted(os.listdir(p))
+        if not os.path.isdir(p) or depth > _EXPLORER_MAX_DEPTH:
+            return {"name": os.path.basename(p), "path": p, "children": None}
+        try:
+            entries = sorted(os.listdir(p))
+        except OSError:
+            return {"name": os.path.basename(p), "path": p, "children": None}
         children = []
         for e in entries:
             if e.startswith(".") or e.startswith("__pycache__") or e == "node_modules":
                 continue
+            if _build.budget[0] <= 0:
+                break
+            _build.budget[0] -= 1
             fp = os.path.join(p, e)
-            children.append(_build(fp))
+            if os.path.islink(fp):
+                continue
+            children.append(_build(fp, depth + 1))
         return {"name": os.path.basename(p), "path": p, "children": children}
-    return {"tree": _build(root)}
+    _build.budget = [_EXPLORER_MAX_ENTRIES]
+    root = _confine_to_registered_repo(root)
+    return {"tree": _build(root, 0)}
 
 
 @app.post("/api/repos/remove")
@@ -245,12 +310,13 @@ async def remove_repo(payload: dict = None, path: str = ""):
     if not p:
         p = path
     _orchestrator.remove_repo(str(Path(p).resolve()))
+    _metrics.increment("repos.removed", tags={"path": p})
     return {"status": "removed"}
 
 
 @app.get("/api/patch/diff")
 def patch_diff(path: str, file_path: str = ""):
-    """Show file content as a diff-ready block."""
+    """Show file content as a diff-ready block (read confined to registered repos)."""
     import os
     root = str(Path(path).resolve())
     if file_path and os.path.isfile(file_path):
@@ -260,17 +326,23 @@ def patch_diff(path: str, file_path: str = ""):
     else:
         return {"file": "", "lines": [], "message": "No file selected"}
     try:
+        fp = _confine_to_registered_repo(fp)
+    except HTTPException as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc.detail))
+    if not os.path.isfile(fp):
+        return {"file": fp, "lines": [], "error": "not a file"}
+    try:
         with open(fp, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
         lines = [{"num": i+1, "text": l, "type": "context"} for i, l in enumerate(content.splitlines())]
         return {"file": fp, "lines": lines[:200], "total": len(lines)}
-    except Exception as e:
+    except OSError as e:
         return {"file": fp, "lines": [], "error": str(e)}
 
 
 @app.post("/api/patch/apply")
 async def patch_apply(payload: dict = None):
-    """Simple find-and-replace patch."""
+    """Simple find-and-replace patch (write confined to registered repos)."""
     import os
     payload = payload or {}
     path = payload.get("path", "")
@@ -280,6 +352,12 @@ async def patch_apply(payload: dict = None):
     root = str(Path(path).resolve())
     fp = os.path.join(root, file_path) if file_path and not os.path.isabs(file_path) else file_path
     try:
+        fp = _confine_to_registered_repo(fp)
+    except HTTPException as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc.detail))
+    if not os.path.isfile(fp):
+        return {"status": "error", "message": "not an existing file inside a registered repo"}
+    try:
         with open(fp, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
         if old_text not in content:
@@ -287,9 +365,16 @@ async def patch_apply(payload: dict = None):
         new_content = content.replace(old_text, new_text, 1)
         with open(fp, "w", encoding="utf-8") as f:
             f.write(new_content)
-        _event_bus.emit(RuntimeEvent(event_type="patch_applied", payload={"file": fp, "repo": root}))
+        _metrics.increment("patch.applied", tags={"repo": root})
+        _emit("patch_applied", {"file": fp, "repo": root})
+        _journal.log_event("patch_apply", {
+            "file": fp,
+            "repo": root,
+            "old_text": old_text,
+            "new_text": new_text,
+        })
         return {"status": "applied", "file": fp}
-    except Exception as e:
+    except OSError as e:
         return {"status": "error", "message": str(e)}
 
 
@@ -305,9 +390,10 @@ async def patch_analyze(payload: dict = None):
     root = str(Path(path).resolve())
     fp = os.path.join(root, file_path) if file_path and not os.path.isabs(file_path) else file_path
     try:
+        fp = _confine_to_registered_repo(fp)
         with open(fp, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
-        
+
         # Parse AST for semantic analysis
         try:
             old_ast = ast.parse(content)
@@ -389,13 +475,72 @@ def cognitive_timeline(limit: int = 20):
     events = _event_bus.log()[-limit:]
     return [
         {
-            "timestamp": e.timestamp.isoformat() if hasattr(e, "timestamp") else "",
+            "timestamp": e.timestamp.isoformat(),
             "event": e.event_type,
             "detail": e.payload,
             "source": e.source,
         }
         for e in events
     ]
+
+
+@app.get("/api/executions/journal")
+def journal_recent(limit: int = 50):
+    """Recent journaled execution entries."""
+    events = _journal.read_events()[-limit:]
+    return [
+        {
+            "timestamp": e.get("timestamp", ""),
+            "type": e.get("type", ""),
+            "sequence": e.get("sequence", 0),
+            "data": e.get("data", {}),
+        }
+        for e in events
+    ]
+
+
+@app.post("/api/executions/replay")
+async def replay_executions(payload: dict = None):
+    """Replay journaled execution events through ReplayEngine.
+
+    Accepts {"journal_path": "..."} (confined to registered repos or the
+    runtime journal itself) and optionally {"from_sequence": N}.
+    """
+    payload = payload or {}
+    journal_path = payload.get("journal_path") or _journal.journal_path
+    from_sequence = payload.get("from_sequence")
+
+    try:
+        if os.path.abspath(journal_path) != os.path.abspath(_journal.journal_path):
+            journal_path = _confine_to_registered_repo(journal_path)
+    except HTTPException as exc:
+        return {"status": "error", "message": str(exc.detail)}
+
+    engine = ReplayEngine(journal_path)
+    engine.load_journal()
+
+    replayed: list[dict] = []
+
+    def _collect(event):
+        replayed.append({
+            "event_type": event.event_type,
+            "payload": event.payload,
+            "timestamp": event.timestamp,
+            "sequence": event.sequence,
+        })
+
+    if from_sequence is not None:
+        count = engine.replay_from_sequence(int(from_sequence), _collect)
+    else:
+        count = engine.replay(_collect)
+
+    return {
+        "status": "replayed",
+        "journal_path": journal_path,
+        "count": count,
+        "last_sequence": engine.get_last_sequence(),
+        "events": replayed[-100:],
+    }
 
 
 # ── SSE stream for real-time dashboard updates ──────────────────────────
@@ -417,7 +562,7 @@ async def event_stream(request: Request):
                         yield {
                             "event": e.event_type,
                             "data": json.dumps({
-                                "timestamp": e.timestamp.isoformat() if hasattr(e, "timestamp") else "",
+                                "timestamp": e.timestamp.isoformat(),
                                 "type": e.event_type,
                                 "detail": e.payload,
                                 "source": e.source,

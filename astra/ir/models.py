@@ -261,6 +261,7 @@ class IRDependency:
     target_module: str
     kind: str = ""
     line: int = 0
+    level: int = 0
     is_resolved: bool = False
     resolved_target: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)

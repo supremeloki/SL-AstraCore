@@ -70,6 +70,9 @@ class MetricsCollector:
     def export_snapshots(self) -> list[MetricSnapshot]:
         return list(self._snapshots)
 
+    def counters(self) -> dict[str, int]:
+        return dict(self._counters)
+
     def reset(self) -> None:
         self._counters.clear()
         self._gauges.clear()

@@ -142,6 +142,16 @@ class UniversalParser:
         )
 
     def _parse_config(self, file_meta, source, parser_name):
+        data = self._load_structured_config(file_meta.rel_path, source)
+        if data is not None:
+            return ParsedFile(
+                file_id=file_meta.id,
+                file_path=file_meta.rel_path,
+                language=file_meta.language or "",
+                parser_name=parser_name,
+                elements=self._config_key_elements(file_meta, data),
+                confidence=0.8,
+            )
         elements = []
         for line_no, line in enumerate((source or "").splitlines(), 1):
             stripped = line.strip()
@@ -158,6 +168,40 @@ class UniversalParser:
             elements=elements or [self._fallback_element(file_meta)],
             confidence=0.65,
         )
+
+    def _load_structured_config(self, rel_path, source):
+        text = source or ""
+        try:
+            if rel_path.endswith(".json"):
+                import json
+
+                parsed = json.loads(text)
+            elif rel_path.endswith(".toml"):
+                import tomllib
+
+                parsed = tomllib.loads(text)
+            elif rel_path.endswith((".yaml", ".yml")):
+                try:
+                    import yaml
+                except ImportError:
+                    return None
+                parsed = yaml.safe_load(text)
+            else:
+                return None
+        except Exception as exc:
+            logger.debug("structured config parse failed for %s: %s", rel_path, exc)
+            return None
+        return parsed if isinstance(parsed, dict) else {}
+
+    def _config_key_elements(self, file_meta, data, prefix=""):
+        # ponytail: line numbers unknown post-load; anchor nested keys at 1 until a line-preserving loader matters
+        elements = []
+        for key, value in data.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            elements.append(self._element(file_meta, path, StructuralKind.CONFIG_KEY, 1, 1))
+            if isinstance(value, dict):
+                elements.extend(self._config_key_elements(file_meta, value, path))
+        return elements
 
     def _parse_generic(self, file_meta, source, parser_name):
         return ParsedFile(

@@ -1,10 +1,45 @@
+from dataclasses import dataclass
+
 from astra.core.logger import get_logger
+from astra.graph.conflict_enricher import detect_circular_dependencies, detect_naming_conflicts
+from astra.graph.pattern_enricher import detect_design_patterns, detect_naming_conventions
+from astra.graph.vault_enricher import build_vault_code_edges
+from astra.ir.models import IRDependency, IRFileNode, IRVaultConceptNode
+from astra.ir.models import NodeType as IRNodeType
+from astra.models.conflict import ConflictSeverity, ConflictType
 from astra.models.graph_edge import EdgeType, GraphEdge
 from astra.models.graph_node import GraphNode, NodeType
-from astra.models.knowledge_graph import ArchitectureGraph, KnowledgeGraph
+from astra.models.knowledge_graph import ArchitectureGraph, KnowledgeGraph, PatternGraphNode
 from astra.models.parser import StructuralKind
 
 logger = get_logger("astra.graph.graph_engine")
+
+_SEVERITY_MAP = {
+    "low": ConflictSeverity.LOW,
+    "medium": ConflictSeverity.MEDIUM,
+    "high": ConflictSeverity.HIGH,
+}
+_CATEGORY_MAP = {
+    "naming": ConflictType.NAMING,
+    "circular_dependency": ConflictType.ARCHITECTURE,
+}
+
+
+@dataclass
+class GraphConflict:
+    """Conflict record shaped for all graph consumers.
+
+    graph_query reads .id, runtime_brain/execution_engine read enum .value,
+    hence neither the raw ConflictMatch nor models.Conflict fits alone.
+    """
+
+    id: str
+    source_a: str
+    source_b: str
+    conflict_type: ConflictType
+    severity: ConflictSeverity
+    description: str
+    confidence: float
 
 
 class DomainGraphEngine:
@@ -86,8 +121,98 @@ class DomainGraphEngine:
                 "total_edges": len(edges),
             },
         )
+
+        ir_files, ir_deps, vault_concepts = self._ir_inputs(repository_index, parse_index, node_index)
+        self._enrich(graph, nodes, ir_files, ir_deps, vault_concepts)
+
         logger.info("Domain graph built: nodes=%d edges=%d", len(nodes), len(edges))
         return graph
+
+    def _ir_inputs(self, repository_index, parse_index, node_index):
+        ir_files = [
+            IRFileNode(
+                id=f"file:{f.rel_path}",
+                type=IRNodeType.FILE,
+                name=f.rel_path.split("/")[-1],
+                source="scanner",
+                file_path=f.rel_path,
+                language=f.language or "",
+            )
+            for f in repository_index.files
+        ]
+        ir_deps = [
+            IRDependency(
+                source_file=d.source_file,
+                target_module=d.target,
+                line=d.line_number,
+            )
+            for d in parse_index.dependencies
+        ]
+        vault_concepts = []
+        for parsed in parse_index.files:
+            linked = tuple(
+                f"file:{dep.target}"
+                for dep in parsed.dependencies
+                if dep.signal_type == "links_to"
+                and f"file:{dep.target}" in node_index
+            )
+            for element in parsed.elements:
+                if element.kind == StructuralKind.HEADING:
+                    vault_concepts.append(IRVaultConceptNode(
+                        id=f"vault:{parsed.file_path}:{element.name}",
+                        type=IRNodeType.VAULT_CONCEPT,
+                        name=element.name,
+                        source="md-parser",
+                        file_path=parsed.file_path,
+                        linked_code_paths=linked,
+                    ))
+        return ir_files, ir_deps, vault_concepts
+
+    def _enrich(self, graph, nodes, ir_files, ir_deps, vault_concepts):
+        graph.conflicts.conflicts = self._conflicts(ir_files, ir_deps)
+        graph.patterns.patterns = self._patterns(ir_files)
+        code_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
+
+        for e in build_vault_code_edges(vault_concepts, code_nodes):
+            graph.edges.append(GraphEdge(
+                from_node=e.from_node,
+                to_node=e.to_node,
+                edge_type=EdgeType.REFERENCES,
+                weight=e.weight,
+                confidence=e.confidence,
+            ))
+
+    def _conflicts(self, ir_files, ir_deps):
+        matches = list(detect_naming_conflicts(ir_files))
+        matches.extend(detect_circular_dependencies(ir_deps))
+        conflicts = []
+        for m in matches:
+            conflicts.append(GraphConflict(
+                id=f"conflict:{m.category}:{m.source_a}:{m.source_b}",
+                source_a=m.source_a,
+                source_b=m.source_b,
+                conflict_type=_CATEGORY_MAP.get(m.category, ConflictType.LOGIC),
+                severity=_SEVERITY_MAP.get(m.severity, ConflictSeverity.MEDIUM),
+                description=m.description,
+                confidence=m.confidence,
+            ))
+        return conflicts
+
+    def _patterns(self, ir_files):
+        matches = list(detect_design_patterns(ir_files))
+        matches.extend(detect_naming_conventions(ir_files))
+        patterns = []
+        for p in matches:
+            patterns.append(PatternGraphNode(
+                id=f"pattern:{p.name}",
+                name=p.name,
+                pattern_type=p.name,
+                occurrences=len(p.locations),
+                locations=list(p.locations),
+                affects=[f"file:{loc}" for loc in p.locations],
+                confidence=p.confidence,
+            ))
+        return patterns
 
     def _add_node(self, node, nodes, node_index):
         if node.id in node_index:

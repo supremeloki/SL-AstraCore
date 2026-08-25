@@ -15,4 +15,3 @@ from astra.runtime.checkpoint import CheckpointManager
 from astra.runtime.recovery import CrashRecovery
 from astra.runtime.dead_letter import DeadLetterQueue
 from astra.runtime.circuit_breaker import CircuitBreaker
-from astra.runtime.resilience import ResilienceEngine

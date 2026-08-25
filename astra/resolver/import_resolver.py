@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections import defaultdict
+import posixpath
 from pathlib import Path
 from typing import Sequence
 
@@ -13,6 +13,8 @@ from astra.ir.models import (
     IRFileParseResult,
     IRSymbol,
 )
+
+_JS_EXTS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 
 
 def resolve_imports_into_edges(
@@ -27,6 +29,11 @@ def resolve_imports_into_edges(
     root_prefix = _common_root(parse_results)
     module_to_file: dict[str, str] = {}
     file_to_module: dict[str, str] = {}
+    parsed_files: dict[str, str] = {
+        _relativize(r.file_node.file_path, root_prefix): r.file_node.file_path
+        for r in parse_results
+        if r.file_node
+    }
 
     for result in parse_results:
         if not result.file_node:
@@ -55,11 +62,11 @@ def resolve_imports_into_edges(
         if not result.file_node:
             continue
         src_fp = result.file_node.file_path
+        rel_src = _relativize(src_fp, root_prefix)
 
         for dep in result.dependencies:
             resolved_path = _resolve_one_import(
-                dep, _relativize(src_fp, root_prefix), module_to_file, file_to_module,
-                parsed_files={_relativize(r.file_node.file_path, root_prefix) for r in parse_results if r.file_node},
+                dep, rel_src, module_to_file, file_to_module, parsed_files,
             )
             resolved_imports[dep.target_module] = resolved_path or ""
 
@@ -104,6 +111,10 @@ def _common_root(parse_results: Sequence[IRFileParseResult]) -> str | None:
     parts = common.parts
     if any(p in ("node_modules", ".venv", "venv", "__pycache__") for p in parts):
         return None
+    # Single-directory repo: bump root one level up so intra-package imports
+    # (e.g. "pkg.helpers") keep their package qualifier in relative paths.
+    if all(p.parent == common for p in paths):
+        common = common.parent
     return str(common)
 
 
@@ -124,24 +135,75 @@ def _resolve_one_import(
     source_file: str,
     module_to_file: dict[str, str],
     file_to_module: dict[str, str],
-    parsed_files: set[str],
+    parsed_files: dict[str, str],
 ) -> str | None:
     target = dep.target_module
 
     if target in parsed_files:
-        return target
+        return parsed_files[target]
 
     if target in module_to_file:
         return module_to_file[target]
 
-    source_dir = str(Path(source_file).parent.as_posix())
+    source_dir = posixpath.dirname(source_file)
 
-    relative_path = f"{source_dir}/{target.replace('.', '/')}.py"
-    if relative_path in parsed_files:
-        return relative_path
+    if target.startswith(("./", "../")):
+        return _resolve_js_relative(target, source_dir, parsed_files)
 
-    second_path = f"{source_dir}/{target.replace('.', '/')}/__init__.py"
-    if second_path in parsed_files:
-        return second_path
+    if target.startswith(".") or dep.level > 0:
+        return _resolve_python_relative(dep, source_dir, module_to_file, parsed_files)
 
+    base = posixpath.normpath(posixpath.join(source_dir, target.replace(".", "/")))
+    for cand in (f"{base}.py", f"{base}/__init__.py"):
+        if cand in parsed_files:
+            return cand
+
+    return None
+
+
+def _resolve_python_relative(
+    dep: IRDependency,
+    source_dir: str,
+    module_to_file: dict[str, str],
+    parsed_files: dict[str, str],
+) -> str | None:
+    target = dep.target_module
+    n_dots = len(target) - len(target.lstrip("."))
+    level = n_dots or dep.level or 1
+    rest = target.lstrip(".")
+
+    parts = [p for p in source_dir.split("/") if p and p != "."]
+    up = level - 1
+    if up > len(parts):
+        return None
+    base_parts = parts[: len(parts) - up]
+    base = "/".join(base_parts)
+
+    if not rest:
+        init = f"{base}/__init__.py" if base else "__init__.py"
+        return parsed_files.get(init)
+
+    mod_path = f"{base}/{rest.replace('.', '/')}" if base else rest.replace(".", "/")
+    for cand in (f"{mod_path}.py", f"{mod_path}/__init__.py"):
+        if cand in parsed_files:
+            return parsed_files[cand]
+
+    mod = f"{base}.{rest}" if base else rest
+    if mod in module_to_file:
+        return module_to_file[mod]
+    return None
+
+
+def _resolve_js_relative(target: str, source_dir: str, parsed_files: dict[str, str]) -> str | None:
+    base = posixpath.normpath(posixpath.join(source_dir, target))
+    if base in parsed_files:
+        return parsed_files[base]
+    for ext in _JS_EXTS:
+        cand = f"{base}{ext}"
+        if cand in parsed_files:
+            return parsed_files[cand]
+    for ext in _JS_EXTS:
+        cand = f"{base}/index{ext}"
+        if cand in parsed_files:
+            return parsed_files[cand]
     return None

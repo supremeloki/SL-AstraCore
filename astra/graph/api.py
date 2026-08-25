@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, Sequence
+from typing import Optional, Protocol, Sequence
 
 from astra.ir.models import IREdge, IRNode
 
@@ -66,9 +66,11 @@ class GraphQueryEngine(Protocol):
 
     def find_dependents(self, node_id: str) -> Sequence[IRNode]: ...
 
-    def impact_analysis(self, node_id: str) -> Sequence[IRNode]: ...
+    def shortest_path(self, src: str, dst: str) -> Optional[Sequence[str]]: ...
+
+    def impact_analysis(self, node_id: str, depth: int = 3) -> Sequence[IRNode]: ...
 
     def extract_subgraph(
         self,
         node_ids: Sequence[str],
-    ) -> KnowledgeGraph: ...
+    ) -> Sequence[IREdge]: ...
