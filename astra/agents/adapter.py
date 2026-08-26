@@ -102,8 +102,6 @@ class AgentAdapterLayer:
         context: IRContextPack,
         tools: Optional[Sequence[str]] = None,
     ) -> AgentRequest:
-        provider = self.resolve_provider(task_description)
-
         payload = {
             "nodes": [{"id": n.node_id, "name": n.name, "type": n.node_type.name} for n in context.nodes],
             "edges": [{"from": e.from_node, "to": e.to_node, "type": e.edge_type.name} for e in context.edges],

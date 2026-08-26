@@ -2,1094 +2,1036 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SL-AstraCore</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SL-AstraCore — Observatory</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* ─────────────────────────────────────────────────────────────
+   SL-AstraCore · Star Atlas instrument panel
+   Palette: indigo night / brass instruments / cyan telemetry
+   ───────────────────────────────────────────────────────────── */
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#0b0e14;
-  --bg-elevated:#0f131a;
-  --panel:#11151c;
-  --panel-hover:#161b26;
-  --border:#1f252e;
-  --border-light:#2a3342;
-  --text:#e2e8f0;
-  --text-dim:#8b98a8;
-  --muted:#5a6577;
-  --accent:#3b82f6;
-  --accent-dim:#1e40af;
-  --green:#10b981;
-  --green-dim:#065f46;
-  --amber:#f59e0b;
-  --amber-dim:#92400e;
-  --red:#ef4444;
-  --purple:#a855f7;
-  --teal:#06b6d4;
-  --radius-sm:6px;
-  --radius-md:10px;
-  --radius-lg:14px;
-  --shadow-sm:0 1px 2px rgba(0,0,0,.3);
-  --shadow-md:0 4px 12px rgba(0,0,0,.4);
-  --shadow-lg:0 8px 24px rgba(0,0,0,.5);
-  --transition:120ms ease;
+  --bg:#090c1a;
+  --bg-deep:#060813;
+  --panel:#10142b;
+  --panel-2:#151a36;
+  --hover:#1a2042;
+  --line:#222950;
+  --line-soft:#1a2040;
+  --text:#e9edfa;
+  --dim:#a6aed2;
+  --mute:#646d99;
+  --gold:#d9a84e;
+  --gold-soft:rgba(217,168,78,.14);
+  --cyan:#63d3ea;
+  --violet:#9d7bff;
+  --green:#5bd692;
+  --red:#ff6b6b;
+  --amber:#ffb454;
+  --pink:#f08fd0;
+  --r-sm:6px;
+  --r-md:10px;
+  --shadow:0 10px 30px rgba(3,5,15,.55);
+  --t:140ms cubic-bezier(.4,0,.2,1);
+  --fs-eyebrow:.625rem;
+  --fs-body:.8125rem;
+  --fs-val:clamp(1.05rem,.95rem + .4vw,1.35rem);
 }
-html,body{height:100%;overflow:hidden}
+html{height:100%}
 body{
-  background:var(--bg);
+  background:
+    radial-gradient(1100px 520px at 75% -8%, rgba(157,123,255,.07), transparent 62%),
+    radial-gradient(900px 480px at 12% 112%, rgba(99,211,234,.05), transparent 60%),
+    var(--bg);
   color:var(--text);
-  font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  font-size:13px;
+  font-family:"Sora",system-ui,sans-serif;
+  font-size:var(--fs-body);
   line-height:1.5;
   -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
 }
-::-webkit-scrollbar{width:8px;height:8px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;border:2px solid transparent;background-clip:content-box}
-::-webkit-scrollbar-thumb:hover{background:var(--border-light)}
-::-webkit-scrollbar-corner{background:transparent}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:var(--mute)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+button{font-family:inherit}
 
+/* ── App frame ─────────────────────────────────────────── */
 .wrap{
   display:grid;
-  grid-template-rows:48px 56px 1fr 180px 170px;
-  grid-template-areas:
-    "topbar"
-    "metrics"
-    "main"
-    "footer"
-    "statusrow";
   height:100vh;
+  grid-template-rows:auto auto minmax(0,1fr) auto auto;
+  grid-template-areas:"topbar""stats""main""deck""status";
 }
+.app-scroll{overflow:hidden}
 
-/* Topbar */
+/* ── Topbar ────────────────────────────────────────────── */
 .topbar{
   grid-area:topbar;
-  height:48px;
-  background:linear-gradient(180deg,var(--panel) 0%,var(--bg-elevated) 100%);
-  border-bottom:1px solid var(--border);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 20px;
-  gap:16px;
-  position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;gap:1rem;
+  padding:.65rem 1.25rem;
+  border-bottom:1px solid var(--line-soft);
+  background:rgba(9,12,26,.85);
 }
-.topbar-left{display:flex;align-items:center;gap:14px}
-.topbar-center{display:flex;align-items:center;gap:10px;flex:1;justify-content:center}
-.topbar-right{display:flex;align-items:center;gap:8px}
-
-.repo-select{display:flex;align-items:center;gap:8px}
-.repo-select label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
-.repo-select select{
-  min-width:220px;
-  background:var(--bg);
-  border:1px solid var(--border);
+.brand{display:flex;align-items:center;gap:.6rem;margin-right:.4rem;user-select:none}
+.brand-mark{
+  width:26px;height:26px;border-radius:7px;flex:none;
+  display:grid;place-items:center;
+  background:linear-gradient(135deg,#2a2450,#141833);
+  border:1px solid var(--line);
+  color:var(--gold);font-size:.85rem;
+}
+.brand-name{font-weight:700;font-size:.86rem;letter-spacing:.14em}
+.brand-name em{color:var(--gold);font-style:normal}
+.brand-sub{font-size:.5625rem;color:var(--mute);letter-spacing:.22em;text-transform:uppercase;display:block;margin-top:-2px}
+.topbar-spacer{flex:1}
+.repo-select{display:flex;align-items:center;gap:.55rem}
+.repo-select label{font-size:var(--fs-eyebrow);font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+select,input[type="text"]{
+  background:var(--bg-deep);
+  border:1px solid var(--line);
   color:var(--text);
-  padding:8px 12px;
-  border-radius:var(--radius-sm);
-  font-size:12px;
-  font-family:inherit;
-  cursor:pointer;
-  transition:border-color var(--transition),box-shadow var(--transition);
+  border-radius:var(--r-sm);
+  padding:.45rem .7rem;
+  font-size:.8rem;font-family:inherit;
+  transition:border-color var(--t);
 }
-.repo-select select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
-
-.model-badge{
-  display:flex;align-items:center;gap:6px;
-  font-size:11px;font-weight:500;color:var(--text-dim);
-  padding:5px 10px;
-  background:var(--bg);
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  transition:background var(--transition),border-color var(--transition);
-}
-.model-badge:hover{background:var(--panel-hover);border-color:var(--border-light)}
-.model-badge svg{width:12px;height:12px;stroke:var(--accent);flex-shrink:0}
-
-.icon-btn{
-  width:32px;height:32px;
-  border-radius:var(--radius-sm);
-  display:flex;align-items:center;justify-content:center;
-  color:var(--muted);
-  background:transparent;
-  border:none;
-  cursor:pointer;
-  transition:background var(--transition),color var(--transition);
-}
-.icon-btn:hover{background:var(--panel-hover);color:var(--text)}
-.icon-btn:active{transform:scale(.95)}
-.icon-btn svg{width:18px;height:18px}
-
-.badge{position:relative}
-.badge::after{
-  content:attr(data-count);
-  position:absolute;top:-2px;right:-2px;
-  min-width:16px;height:16px;
-  background:var(--red);color:#fff;
-  border-radius:999px;
-  font-size:9px;font-weight:600;
-  display:flex;align-items:center;justify-content:center;
-  padding:0 4px;
-}
-
+select:hover{border-color:var(--mute)}
+select:focus,input:focus{outline:none;border-color:var(--gold)}
 .btn{
-  padding:7px 16px;
-  border-radius:var(--radius-sm);
-  font-size:12px;
-  font-weight:600;
-  font-family:inherit;
-  cursor:pointer;
-  border:none;
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  transition:all var(--transition);
-}
-.btn-primary{
-  background:var(--accent);
-  color:#fff;
-  box-shadow:0 1px 2px rgba(59,130,246,.3);
-}
-.btn-primary:hover{background:#2563eb;box-shadow:0 2px 8px rgba(59,130,246,.4)}
-.btn-primary:active{transform:translateY(1px)}
-.btn-secondary{
-  background:var(--panel);
-  color:var(--text);
-  border:1px solid var(--border);
-}
-.btn-secondary:hover{background:var(--panel-hover);border-color:var(--border-light)}
-.btn-ghost{
-  background:transparent;
-  color:var(--text-dim);
+  display:inline-flex;align-items:center;gap:.4rem;
+  padding:.48rem .95rem;
+  border-radius:var(--r-sm);
+  font-size:.75rem;font-weight:600;cursor:pointer;
   border:1px solid transparent;
+  transition:all var(--t);
+  white-space:nowrap;
 }
-.btn-ghost:hover{background:var(--panel-hover);color:var(--text);border-color:var(--border)}
+.btn svg{width:13px;height:13px}
+.btn-primary{background:var(--gold);color:#1c1608;border-color:var(--gold)}
+.btn-primary:hover{background:#e6ba63;box-shadow:0 2px 14px rgba(217,168,78,.28)}
+.btn-primary:active{transform:translateY(1px)}
+.btn-ghost{background:transparent;color:var(--dim);border-color:var(--line)}
+.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
 
-/* Metrics Row */
-.metrics{
-  grid-area:metrics;
-  display:grid;
-  grid-template-columns:repeat(7,1fr);
-  gap:10px;
-  padding:12px 20px;
-  background:linear-gradient(180deg,var(--panel) 0%,var(--bg-elevated) 100%);
-  border-bottom:1px solid var(--border);
+/* ── Stat strip ────────────────────────────────────────── */
+.stats{
+  grid-area:stats;
+  display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
+  padding:.7rem 1.25rem;
+  gap:0;
+  border-bottom:1px solid var(--line-soft);
+  background:rgba(9,12,26,.5);
 }
-.metric{
-  background:var(--bg);
-  border:1px solid var(--border);
-  border-radius:var(--radius-md);
-  padding:14px 16px;
-  position:relative;
-  transition:transform var(--transition),border-color var(--transition),box-shadow var(--transition);
+.stat{padding:.15rem 1.1rem;border-left:1px solid var(--line-soft);min-width:0}
+.stat:first-child{border-left:none;padding-left:.2rem}
+.stat-lbl{font-size:var(--fs-eyebrow);font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+.stat-val{
+  font-size:var(--fs-val);font-weight:700;line-height:1.25;
+  font-feature-settings:"tnum" 1;
+  letter-spacing:-.01em;
 }
-.metric:hover{transform:translateY(-1px);border-color:var(--border-light);box-shadow:var(--shadow-md)}
-.metric-icon{
-  position:absolute;top:14px;right:14px;
-  width:20px;height:20px;
-  color:var(--muted);opacity:.5;
-}
-.metric-lbl{
-  font-size:10px;font-weight:600;
-  text-transform:uppercase;letter-spacing:.06em;
-  color:var(--muted);
-  margin-bottom:4px;
-}
-.metric-val{
-  font-size:20px;font-weight:700;line-height:1.2;
-  font-family:"JetBrains Mono",Menlo,monospace;
-}
-.metric-sub{
-  font-size:11px;margin-top:4px;
-  display:flex;align-items:center;gap:4px;
-}
-.metric-sub.positive{color:var(--green)}
-.metric-sub.info{color:var(--accent)}
-.metric-sub.amber{color:var(--amber)}
+.stat-sub{font-size:.625rem;color:var(--mute);margin-top:.05rem}
+.stat-val .unit{font-size:.7em;color:var(--dim);font-weight:500;margin-left:.15em}
 
-/* Main Grid - 3 Panels */
+/* ── Panels ────────────────────────────────────────────── */
+.panel{
+  display:flex;flex-direction:column;min-height:0;min-width:0;
+  background:linear-gradient(180deg,var(--panel) 0%,#0d1130 100%);
+  border:1px solid var(--line-soft);
+  border-radius:var(--r-md);
+  box-shadow:var(--shadow);
+}
+.plate-hd{
+  flex:none;
+  display:flex;align-items:center;justify-content:space-between;gap:.5rem;
+  padding:.6rem .9rem;
+  border-bottom:1px solid var(--line-soft);
+}
+.plate-title{display:flex;align-items:baseline;gap:.55rem;min-width:0}
+.plate-index{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:.5625rem;color:var(--gold);
+  letter-spacing:.1em;
+}
+.plate-name{
+  font-size:var(--fs-eyebrow);font-weight:600;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--dim);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.plate-actions{display:flex;gap:.2rem;flex:none}
+.act-btn{
+  width:26px;height:26px;border-radius:var(--r-sm);
+  display:grid;place-items:center;
+  background:transparent;border:none;cursor:pointer;
+  color:var(--mute);transition:all var(--t);
+}
+.act-btn:hover{background:var(--hover);color:var(--gold)}
+.act-btn svg{width:13px;height:13px}
+.plate-bd{flex:1;overflow:auto;padding:.75rem .9rem;min-height:0}
+
+.empty{
+  height:100%;display:grid;place-content:center;justify-items:center;gap:.5rem;
+  color:var(--mute);font-size:.75rem;text-align:center;padding:1rem;
+}
+.empty svg{width:26px;height:26px;opacity:.35}
+
+/* ── Main triptych ─────────────────────────────────────── */
 .main{
   grid-area:main;
   display:grid;
-  grid-template-columns:320px 1fr 360px;
-  gap:12px;
-  padding:12px 20px;
-  overflow:hidden;
+  grid-template-columns:minmax(230px,300px) minmax(0,1fr) minmax(260px,340px);
+  gap:.75rem;
+  padding:.75rem 1.25rem;
   min-height:0;
 }
 
-.panel{
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:var(--radius-lg);
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
-  box-shadow:var(--shadow-sm);
-  transition:box-shadow var(--transition),border-color var(--transition);
-}
-.panel:hover{box-shadow:var(--shadow-md);border-color:var(--border-light)}
-.panel-hd{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:10px 14px;
-  border-bottom:1px solid var(--border);
-  background:linear-gradient(180deg,var(--panel) 0%,var(--bg-elevated) 100%);
-}
-.panel-title{
-  display:flex;align-items:center;gap:8px;
-  font-size:11px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.05em;
-  color:var(--text-dim);
-}
-.panel-title svg{width:14px;height:14px;stroke:var(--accent);flex-shrink:0}
-.panel-title small{font-size:10px;font-weight:400;color:var(--muted)}
-.panel-actions{display:flex;gap:4px}
-.act-btn{
-  width:28px;height:28px;
-  border-radius:var(--radius-sm);
-  display:flex;align-items:center;justify-content:center;
-  color:var(--muted);
-  background:transparent;border:none;
-  cursor:pointer;
-  transition:all var(--transition);
-}
-.act-btn:hover{background:var(--panel-hover);color:var(--accent)}
-.act-btn:active{transform:scale(.9)}
-.act-btn svg{width:14px;height:14px}
-.panel-bd{flex:1;overflow:auto;padding:12px 14px;min-height:0}
-
-/* Bottom Row */
-.statusrow{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:12px;
-  padding:0 20px 16px;
-  overflow:hidden;
-  min-height:0;
-}
-.footer{
-  grid-area:footer;
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:12px;
-  padding:0 20px 16px;
-  overflow:hidden;
-  min-height:0;
-  border-top:1px solid var(--border);
-  background:linear-gradient(0deg,var(--bg-elevated) 0%,var(--bg) 100%);
-}
-.footer .panel{margin:0}
-
-/* Tree */
-.tree{display:flex;flex-direction:column;gap:1px}
+/* Explorer */
 .tree-item{
-  display:flex;align-items:center;gap:6px;
-  padding:5px 8px;
-  font-size:12px;
-  color:var(--text-dim);
-  border-radius:var(--radius-sm);
-  cursor:pointer;
-  white-space:nowrap;
-  transition:all var(--transition);
-  position:relative;
+  display:flex;align-items:center;gap:.45rem;
+  padding:.22rem .45rem;border-radius:5px;
+  font-size:.74rem;color:var(--dim);cursor:pointer;
+  white-space:nowrap;transition:background var(--t),color var(--t);
 }
-.tree-item:hover{background:var(--panel-hover);color:var(--text)}
-.tree-item.dir{color:var(--amber)}
-.tree-item.selected{background:rgba(59,130,246,.15);color:var(--accent);border-left:2px solid var(--accent)}
-.tree-item svg{width:14px;height:14px;flex-shrink:0;stroke:currentColor}
-.tree-children{padding-left:16px;border-left:1px solid var(--border);margin-left:7px}
+.tree-item:hover{background:var(--hover);color:var(--text)}
+.tree-item .glyph{flex:none;width:13px;height:13px;opacity:.75}
+.tree-item.dir .glyph{color:var(--gold)}
+.tree-item.file .glyph{color:var(--cyan)}
+.tree-item.selected{background:var(--gold-soft);color:var(--gold)}
 
-/* Graph */
-.graph-wrap{position:relative;flex:1;overflow:hidden;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border)}
-#gCanvas{width:100%;height:100%;display:block}
-.graph-legend{
-  position:absolute;bottom:10px;left:10px;
-  display:flex;flex-wrap:wrap;gap:8px;
-  background:rgba(17,21,28,.95);
-  backdrop-filter:blur(8px);
-  border:1px solid var(--border);
-  border-radius:var(--radius-md);
-  padding:8px 12px;
-  z-index:5;
-  box-shadow:var(--shadow-lg);
+/* Star chart */
+.chart-wrap{position:relative;flex:1;min-height:0;background:var(--bg-deep);border-radius:0 0 var(--r-md) var(--r-md);overflow:hidden}
+#gCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+#gCanvas.dragging{cursor:grabbing}
+.chart-hud{
+  position:absolute;top:.6rem;left:.7rem;z-index:4;
+  font-family:"IBM Plex Mono",monospace;font-size:.6rem;
+  color:var(--mute);letter-spacing:.08em;pointer-events:none;
 }
-.legend-item{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-dim);white-space:nowrap}
-.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.graph-zoom{
-  position:absolute;top:10px;right:10px;
-  display:flex;flex-direction:column;gap:4px;z-index:5;
+.chart-legend{
+  position:absolute;bottom:.6rem;left:.7rem;z-index:4;
+  display:flex;flex-wrap:wrap;gap:.65rem;
+  padding:.4rem .7rem;
+  background:rgba(6,8,19,.82);backdrop-filter:blur(6px);
+  border:1px solid var(--line-soft);border-radius:var(--r-sm);
+  max-width:calc(100% - 4rem);
 }
+.legend-item{display:flex;align-items:center;gap:.35rem;font-size:.6rem;color:var(--dim);white-space:nowrap}
+.legend-dot{width:7px;height:7px;border-radius:50%}
+.chart-zoom{position:absolute;top:.6rem;right:.6rem;z-index:4;display:flex;flex-direction:column;gap:.25rem}
 .zoom-btn{
-  width:28px;height:28px;
-  border-radius:var(--radius-sm);
-  background:rgba(17,21,28,.95);
-  backdrop-filter:blur(8px);
-  border:1px solid var(--border);
-  display:flex;align-items:center;justify-content:center;
-  color:var(--muted);
-  cursor:pointer;
-  font-size:12px;
-  transition:all var(--transition);
-  box-shadow:var(--shadow-sm);
+  width:27px;height:27px;border-radius:var(--r-sm);
+  background:rgba(6,8,19,.85);backdrop-filter:blur(6px);
+  border:1px solid var(--line);color:var(--mute);cursor:pointer;
+  display:grid;place-items:center;transition:all var(--t);
 }
-.zoom-btn:hover{background:var(--panel-hover);color:var(--accent);border-color:var(--border-light)}
-.zoom-btn:active{transform:scale(.95)}
-.zoom-btn svg{width:14px;height:14px}
+.zoom-btn:hover{color:var(--gold);border-color:var(--gold)}
+.zoom-btn svg{width:13px;height:13px}
 
-/* Execution Detail */
-.detail-grid{display:grid;gap:8px}
+/* Inspector */
 .detail-row{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:6px 0;
-  border-bottom:1px solid var(--border);
-  font-size:12px;
+  display:flex;justify-content:space-between;align-items:baseline;gap:.75rem;
+  padding:.42rem 0;border-bottom:1px dashed var(--line-soft);font-size:.74rem;
 }
 .detail-row:last-child{border-bottom:none}
-.detail-lbl{color:var(--muted)}
+.detail-lbl{color:var(--mute);flex:none;letter-spacing:.04em}
 .detail-val{
-  font-weight:500;
-  font-family:"JetBrains Mono",Menlo,monospace;
-  font-size:11px;
-  max-width:200px;
-  text-align:right;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:"IBM Plex Mono",monospace;font-size:.7rem;text-align:right;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px;
 }
-.detail-val.ok{color:var(--green)}
-.detail-val.accent{color:var(--accent)}
-.detail-val.warn{color:var(--amber)}
+.detail-val.ok{color:var(--green)}.detail-val.accent{color:var(--gold)}.detail-val.warn{color:var(--amber)}
+.dep-chip{
+  display:inline-block;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:"IBM Plex Mono",monospace;font-size:.64rem;color:var(--cyan);
+  background:rgba(99,211,234,.08);border:1px solid rgba(99,211,234,.18);
+  border-radius:4px;padding:.05rem .4rem;margin:.1rem 0 0 .25rem;vertical-align:middle;
+}
 
-/* Context */
-.ctx-input{
-  width:100%;
-  margin-bottom:10px;
-  background:var(--bg);
-  border:1px solid var(--border);
-  color:var(--text);
-  padding:8px 10px;
-  border-radius:var(--radius-sm);
-  font-size:12px;
-  font-family:inherit;
-  transition:border-color var(--transition),box-shadow var(--transition);
+/* ── Deck row ──────────────────────────────────────────── */
+.deck{
+  grid-area:deck;
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;
+  padding:0 1.25rem .75rem;min-height:0;
+  height:215px;
 }
-.ctx-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
-.ctx-input::placeholder{color:var(--muted)}
-.ctx-header{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px}
-.ctx-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
-.ctx-stat{
-  background:var(--bg);
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  padding:10px;
-  text-align:center;
-  transition:transform var(--transition),border-color var(--transition);
-}
-.ctx-stat:hover{transform:translateY(-1px);border-color:var(--border-light)}
-.ctx-stat-lbl{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
-.ctx-stat-val{font-size:14px;font-weight:700;font-family:"JetBrains Mono",Menlo,monospace;color:var(--text);margin-top:2px}
-.top-files{display:flex;flex-direction:column;gap:6px}
-.top-file{
-  display:flex;align-items:center;gap:8px;
-  padding:4px 0;
-  font-size:11px;
-  transition:opacity var(--transition);
-}
-.top-file:hover{opacity:.8}
-.tf-name{
-  font-size:11px;
-  color:var(--text-dim);
-  min-width:120px;
-  max-width:180px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.tf-bar{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.ctx-input{width:100%;margin-bottom:.65rem}
+.ctx-input::placeholder{color:var(--mute)}
+.ctx-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.45rem;margin-bottom:.6rem}
+.ctx-stat{background:var(--bg-deep);border:1px solid var(--line-soft);border-radius:var(--r-sm);padding:.4rem;text-align:center}
+.ctx-stat-lbl{font-size:.5625rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.ctx-stat-val{font-family:"IBM Plex Mono",monospace;font-size:.85rem;font-weight:500;margin-top:.1rem}
+.topfile{display:flex;align-items:center;gap:.55rem;padding:.18rem 0;font-size:.7rem}
+.tf-name{font-family:"IBM Plex Mono",monospace;color:var(--dim);min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tf-bar{width:70px;height:3px;background:var(--line-soft);border-radius:2px;overflow:hidden;flex:none}
 .tf-fill{height:100%;border-radius:2px;transition:width .3s ease}
-.tf-score{
-  font-size:10px;font-weight:600;
-  font-family:"JetBrains Mono",Menlo,monospace;
-  min-width:32px;text-align:right;
-}
+.tf-score{font-family:"IBM Plex Mono",monospace;font-size:.62rem;min-width:34px;text-align:right;flex:none}
 
-/* Monitor */
-.exec-progress{margin-bottom:10px}
-.progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:6px}
-.progress-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:3px;transition:width .3s ease}
-.progress-label{display:flex;justify-content:space-between;font-size:11px}
-.step-table{width:100%;border-collapse:collapse;font-size:11px}
-.step-table th{text-align:left;color:var(--muted);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--border)}
-.step-table td{padding:6px 8px;border-bottom:1px solid var(--border)}
-.step-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:8px;flex-shrink:0}
-.step-dot.done{background:var(--green);box-shadow:0 0 0 2px rgba(16,185,129,.2)}
-.step-dot.run{background:var(--amber);animation:pulse 1.2s ease-in-out infinite;box-shadow:0 0 0 2px rgba(245,158,11,.2)}
-.step-dot.pend{background:var(--muted);opacity:.4}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.exec-progress{margin-bottom:.55rem}
+.progress-label{display:flex;justify-content:space-between;font-size:.68rem;color:var(--dim)}
+.progress-label b{font-family:"IBM Plex Mono",monospace;font-weight:500}
+.progress-bar{height:4px;background:var(--line-soft);border-radius:2px;overflow:hidden;margin-top:.3rem}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--amber));border-radius:2px;transition:width .3s ease}
+.step-table{width:100%;border-collapse:collapse;font-size:.68rem}
+.step-table th{text-align:left;color:var(--mute);font-weight:500;padding:.28rem .35rem;border-bottom:1px solid var(--line-soft);letter-spacing:.06em;text-transform:uppercase;font-size:.5625rem}
+.step-table td{padding:.28rem .35rem;border-bottom:1px solid var(--line-soft);color:var(--dim)}
+.step-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:.45rem}
+.step-dot.done{background:var(--green)}
+.step-dot.run{background:var(--amber);animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-/* Patch Review */
 .diff-block{
-  background:var(--bg);
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  padding:10px;
-  font-family:"JetBrains Mono",Menlo,monospace;
-  font-size:11px;
-  line-height:1.6;
-  overflow-x:auto;
-  max-height:180px;
-  overflow-y:auto;
-  margin-bottom:10px;
+  background:var(--bg-deep);border:1px solid var(--line-soft);border-radius:var(--r-sm);
+  padding:.55rem .7rem;
+  font-family:"IBM Plex Mono",monospace;font-size:.66rem;line-height:1.65;
+  max-height:118px;overflow:auto;margin-bottom:.55rem;
 }
-.diff-del{color:var(--red);opacity:.8}
-.diff-add{color:var(--green);opacity:.9}
-.diff-ctx{color:var(--text-dim)}
-.diff-line-num{color:var(--muted);margin-right:8px;user-select:none;min-width:20px;display:inline-block;text-align:right}
-.patch-actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn-approve{padding:6px 14px;background:var(--green);color:#fff;border-radius:var(--radius-sm);font-weight:600;font-size:11px;border:none;cursor:pointer;transition:all var(--transition)}
-.btn-approve:hover{background:#059669;box-shadow:0 2px 8px rgba(16,185,129,.4)}
-.btn-reject{padding:6px 14px;background:var(--red);color:#fff;border-radius:var(--radius-sm);font-weight:600;font-size:11px;border:none;cursor:pointer;transition:all var(--transition)}
-.btn-reject:hover{background:#dc2626;box-shadow:0 2px 8px rgba(239,68,68,.4)}
-.btn-view-diff{padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;color:var(--text-dim);background:transparent;cursor:pointer;transition:all var(--transition)}
-.btn-view-diff:hover{background:var(--panel-hover);color:var(--text);border-color:var(--border-light)}
+.diff-line-num{color:var(--mute);margin-right:.6rem;display:inline-block;min-width:1.6rem;text-align:right;user-select:none}
+.diff-ctx{color:var(--dim);white-space:pre}
+.patch-meta{font-family:"IBM Plex Mono",monospace;font-size:.62rem;color:var(--mute);margin-bottom:.4rem}
+.patch-actions{display:flex;gap:.45rem}
+.btn-sm{padding:.32rem .7rem;font-size:.66rem}
 
-/* Runtime Status */
-.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.stat-card{
-  background:var(--bg);
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  padding:10px;
-  font-size:11px;
-  transition:transform var(--transition),border-color var(--transition);
+/* ── Status row ────────────────────────────────────────── */
+.statusrow{
+  grid-area:status;
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;
+  padding:0 1.25rem .8rem;min-height:0;height:196px;
 }
-.stat-card:hover{transform:translateY(-1px);border-color:var(--border-light)}
-.stat-title{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
-.stat-row{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px;font-size:11px}
-.stat-label{color:var(--muted)}
-.stat-val{font-weight:600;font-family:"JetBrains Mono",Menlo,monospace}
-.stat-val.ok{color:var(--green)}
-.stat-val.warn{color:var(--amber)}
-.mem-gauge{width:100%;height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:4px}
-.mem-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--amber));border-radius:3px;transition:width .3s ease}
+.stat-grid2{display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
+.mini-card{background:var(--bg-deep);border:1px solid var(--line-soft);border-radius:var(--r-sm);padding:.45rem .55rem;font-size:.66rem}
+.mini-title{font-size:.5625rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:.3rem}
+.mini-row{display:flex;justify-content:space-between;gap:.5rem;margin-bottom:.14rem}
+.mini-row:last-child{margin-bottom:0}
+.mini-lbl{color:var(--mute)}
+.mini-val{font-family:"IBM Plex Mono",monospace;font-size:.66rem}
+.mini-val.ok{color:var(--green)}
+.mem-gauge{height:3px;background:var(--line-soft);border-radius:2px;overflow:hidden;margin-top:.3rem}
+.mem-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--amber));border-radius:2px;transition:width .3s ease}
 
-/* Performance */
-.perf-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.perf-card{
-  background:var(--bg);
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  padding:10px;
-  font-size:11px;
-  transition:transform var(--transition),border-color var(--transition);
-}
-.perf-card:hover{transform:translateY(-1px);border-color:var(--border-light)}
-.perf-title{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
-.perf-val{font-size:17px;font-weight:700;font-family:"JetBrains Mono",Menlo,monospace;margin-bottom:4px}
-.perf-canvas{height:36px;width:100%}
+.perf-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.45rem}
+.perf-card{background:var(--bg-deep);border:1px solid var(--line-soft);border-radius:var(--r-sm);padding:.4rem .55rem}
+.perf-title{font-size:.5625rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+.perf-val{font-family:"IBM Plex Mono",monospace;font-size:.92rem;font-weight:500;margin:.05rem 0 .1rem}
+.perf-canvas{height:22px;width:100%;display:block}
 
-/* Events */
-.events-list{display:flex;flex-direction:column;gap:4px}
+.events-list{display:flex;flex-direction:column;gap:.22rem}
 .event-item{
-  display:flex;gap:8px;
-  padding:6px 8px;
-  background:var(--bg);
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  font-size:11px;
-  transition:transform var(--transition),border-color var(--transition);
+  display:flex;gap:.55rem;align-items:baseline;
+  padding:.24rem .45rem;border-radius:5px;font-size:.66rem;
 }
-.event-item:hover{transform:translateX(2px);border-color:var(--border-light)}
-.event-time{color:var(--muted);font-family:"JetBrains Mono",Menlo,monospace;min-width:56px;flex-shrink:0}
-.event-type{font-weight:500;color:var(--accent);min-width:90px;flex-shrink:0;font-size:10px;text-transform:uppercase;letter-spacing:.03em}
-.event-desc{color:var(--text-dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.event-item:nth-child(odd){background:var(--bg-deep)}
+.event-time{font-family:"IBM Plex Mono",monospace;color:var(--mute);flex:none;font-size:.6rem}
+.event-type{color:var(--gold);flex:none;min-width:104px;font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.event-desc{color:var(--mute);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:"IBM Plex Mono",monospace;font-size:.6rem}
 
-/* Modal */
-.modal{
-  position:fixed;inset:0;
-  background:rgba(0,0,0,.7);
-  backdrop-filter:blur(4px);
-  display:none;align-items:center;justify-content:center;
-  z-index:1000;padding:20px;
-}
-.modal.open{display:flex}
+/* ── Modal / toast ─────────────────────────────────────── */
+.modal{position:fixed;inset:0;background:rgba(4,6,15,.72);backdrop-filter:blur(5px);display:none;place-items:center;z-index:1000;padding:1rem}
+.modal.open{display:grid}
 .modal-box{
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:var(--radius-lg);
-  padding:24px;
-  min-width:440px;
-  max-width:90vw;
-  box-shadow:var(--shadow-lg);
-  animation:modalIn .15s ease;
+  width:min(430px,94vw);
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:1.4rem;box-shadow:var(--shadow);
+  animation:modalIn .16s ease;
 }
-@keyframes modalIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
-.modal-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-.modal-title{font-size:15px;font-weight:700}
-.modal-close{
-  width:28px;height:28px;
-  border-radius:var(--radius-sm);
-  display:flex;align-items:center;justify-content:center;
-  color:var(--muted);
-  background:transparent;border:none;
-  cursor:pointer;
-  transition:all var(--transition);
-}
-.modal-close:hover{background:var(--panel-hover);color:var(--red)}
-.form-group{margin-bottom:14px}
-.form-label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:6px;font-weight:500}
-.form-input{
-  width:100%;
-  padding:10px 12px;
-  background:var(--bg);
-  border:1px solid var(--border);
-  color:var(--text);
-  border-radius:var(--radius-sm);
-  font-size:12px;font-family:inherit;
-  transition:border-color var(--transition),box-shadow var(--transition);
-}
-.form-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
-.form-hint{font-size:10px;color:var(--muted);margin-top:4px}
-.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
-
-/* Empty State */
-.empty-state{
-  display:flex;align-items:center;justify-content:center;
-  color:var(--muted);
-  padding:24px 16px;
-  text-align:center;
-  height:100%;
-  font-size:12px;
-}
-.empty-state svg{width:32px;height:32px;margin-right:10px;opacity:.3}
-
-/* Toast */
-.toast{
-  position:fixed;bottom:16px;right:16px;
-  z-index:2000;
-  display:flex;flex-direction:column;gap:6px;
-}
+@keyframes modalIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.modal-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.modal-title{font-size:.9rem;font-weight:700;letter-spacing:.02em}
+.form-group{margin-bottom:.85rem}
+.form-label{display:block;font-size:.68rem;color:var(--dim);margin-bottom:.35rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.form-input{width:100%;padding:.55rem .7rem;font-size:.78rem}
+.form-hint{font-size:.62rem;color:var(--mute);margin-top:.3rem}
+.modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:1.1rem}
+.toast{position:fixed;bottom:1rem;right:1rem;z-index:2000;display:flex;flex-direction:column;gap:.4rem}
 .toast-item{
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  padding:10px 14px;
-  display:flex;align-items:center;gap:8px;
-  min-width:260px;max-width:380px;
-  box-shadow:var(--shadow-lg);
-  animation:slideIn .2s ease;
+  background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);
+  border-radius:var(--r-sm);padding:.55rem .85rem;font-size:.72rem;min-width:240px;max-width:360px;
+  box-shadow:var(--shadow);animation:toastIn .2s ease;
 }
-.toast-item.error{border-color:var(--red)}
-@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
-.toast-msg{font-size:11px;flex:1}
-.toast-close{color:var(--muted);padding:2px;cursor:pointer}
+.toast-item.error{border-left-color:var(--red)}
+@keyframes toastIn{from{transform:translateX(12px);opacity:0}to{transform:none;opacity:1}}
 
-/* Selection highlight for tree items */
-.tree-item.selected{background:rgba(59,130,246,.12);color:var(--accent);font-weight:500}
+/* Load-in */
+.main>.panel,.deck>.panel,.statusrow>.panel{animation:rise .38s ease backwards}
+.deck>.panel:nth-child(2),.statusrow>.panel:nth-child(2){animation-delay:.05s}
+.deck>.panel:nth-child(3),.statusrow>.panel:nth-child(3){animation-delay:.1s}
+@keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+
+/* ── Responsive scale ──────────────────────────────────── */
+@media (max-width:1360px){
+  .main{grid-template-columns:minmax(210px,250px) minmax(0,1fr) minmax(230px,290px)}
+}
+@media (max-width:1140px){
+  html,body{height:auto;overflow:auto}
+  .wrap{height:auto;grid-template-rows:none}
+  .main{grid-template-columns:1fr 1fr;grid-auto-rows:minmax(380px,auto)}
+  .main .panel:first-child{grid-column:1}
+  .main .panel:nth-child(2){grid-column:2;grid-row:1 / span 2}
+  .main .panel:nth-child(3){grid-column:1}
+  .main .panel{min-height:340px}
+  .deck{height:auto;grid-template-columns:1fr 1fr;grid-auto-rows:minmax(215px,auto)}
+  .statusrow{height:auto;grid-template-columns:1fr 1fr;grid-auto-rows:minmax(190px,auto)}
+}
+@media (max-width:720px){
+  .topbar{flex-wrap:wrap;padding:.6rem .9rem}
+  .brand-sub{display:none}
+  .repo-select{flex:1;min-width:0}
+  .repo-select select{width:100%;min-width:0}
+  .main,.deck,.statusrow{grid-template-columns:1fr;padding-inline:.9rem;gap:.6rem}
+  .main .panel:first-child,.main .panel:nth-child(2),.main .panel:nth-child(3){grid-column:1;grid-row:auto}
+  .stats{grid-auto-flow:row;grid-template-columns:1fr 1fr;gap:.55rem;padding:.7rem .9rem}
+  .stat{border-left:none;padding:.15rem .2rem}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
+
 <header class="topbar">
-<div class="topbar-left">
-<div class="repo-select">
-<label>Repository</label>
-<select id="repoSelect"><option value="">Select a repository...</option></select>
-</div>
-</div>
-<div class="topbar-center">
-<div class="model-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>LLM: <strong>Auto</strong></span></div>
-<div class="model-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>Embedding: <strong>Auto</strong></span></div>
-</div>
-<div class="topbar-right">
-<button class="icon-btn badge" data-count="0" title="Notifications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></button>
-<button class="icon-btn" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
-<button class="btn btn-primary" onclick="mAdd.classList.add('open')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Repo</button>
-</div>
+  <div class="brand">
+    <div class="brand-mark">✦</div>
+    <div>
+      <div class="brand-name">ASTRA<em>CORE</em></div>
+      <span class="brand-sub">Repository Observatory</span>
+    </div>
+  </div>
+  <div class="repo-select">
+    <label for="repoSelect">Observatory</label>
+    <select id="repoSelect"><option value="">No repositories yet</option></select>
+  </div>
+  <div class="topbar-spacer"></div>
+  <button class="btn btn-primary" onclick="mAdd.classList.add('open')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Add repository
+  </button>
 </header>
 
-<div class="metrics" id="metricsRow"></div>
+<section class="stats" id="metricsRow" aria-label="Overview statistics"></section>
 
 <div class="main">
-<div class="panel" id="pExplorer">
-<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Repository Explorer</span></div>
-<div class="panel-bd" id="explorerBody"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Select a repository</div></div>
-</div>
 
-<div class="panel" id="pGraph">
-<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="3"/><circle cx="19" cy="19" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="5" cy="5" r="3"/><line x1="12" y1="12" x2="19" y2="5"/><line x1="12" y1="12" x2="19" y2="19"/><line x1="12" y1="12" x2="5" y2="19"/><line x1="12" y1="12" x2="5" y2="5"/></svg>Knowledge Graph</span>
-<div class="panel-actions">
-<button class="act-btn" title="Center" onclick="centerG()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/></svg></button>
-<button class="act-btn" title="Relayout" onclick="relayout()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
-</div>
-</div>
-<div class="graph-wrap">
-<canvas id="gCanvas"></canvas>
-<div class="graph-zoom">
-<button class="zoom-btn" title="Zoom In" onclick="zoomG(1.3)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg></button>
-<button class="zoom-btn" title="Zoom Out" onclick="zoomG(0.7)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg></button>
-</div>
-<div class="graph-legend" id="graphLegend"></div>
-</div>
-</div>
+  <section class="panel" aria-label="Repository explorer">
+    <div class="plate-hd">
+      <span class="plate-title"><span class="plate-index">01</span><span class="plate-name">Explorer</span></span>
+      <span class="plate-actions"><span class="mono" id="explorerCount" style="font-size:.6rem;color:var(--mute)"></span></span>
+    </div>
+    <div class="plate-bd" id="explorerBody"><div class="empty">Select a repository to explore its files.</div></div>
+  </section>
 
-<div class="panel" id="pExec">
-<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Execution Engine</span><small>Details</small></div>
-<div class="panel-bd">
-<div class="detail-grid" id="execBody"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><small>Click a node in the graph</small></div></div>
-</div>
-</div>
-</div>
+  <section class="panel" aria-label="Knowledge graph">
+    <div class="plate-hd">
+      <span class="plate-title"><span class="plate-index">02</span><span class="plate-name">Star Chart · Knowledge Graph</span></span>
+      <span class="plate-actions">
+        <button class="act-btn" title="Center view" onclick="centerG()" aria-label="Center view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/></svg></button>
+        <button class="act-btn" title="Relayout" onclick="relayout()" aria-label="Relayout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
+      </span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="gCanvas"></canvas>
+      <div class="chart-hud" id="chartHud"></div>
+      <div class="chart-legend" id="graphLegend"></div>
+      <div class="chart-zoom">
+        <button class="zoom-btn" onclick="zoomG(1.3)" aria-label="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg></button>
+        <button class="zoom-btn" onclick="zoomG(.72)" aria-label="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11h6"/></svg></button>
+      </div>
+    </div>
+  </section>
 
-<div class="footer">
-<div class="panel" id="pContext">
-<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>Context Inspector</span></div>
-<div class="panel-bd">
-<input class="ctx-input" id="ctxQuery" placeholder="e.g. Refactor authentication to use OAuth2...">
-<div class="ctx-stats" id="ctxStats" style="display:none"></div>
-<div class="top-files" id="ctxFiles"></div>
-</div>
-</div>
-
-<div class="panel" id="pMonitor">
-<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Execution Monitor</span><span id="monitorStatus" style="font-size:10px;color:var(--green);font-weight:600">Idle</span></div>
-<div class="panel-bd">
-<div class="exec-progress">
-<div class="progress-label"><span>Progress</span><span id="monitorPct">0%</span></div>
-<div class="progress-bar"><div class="progress-fill" id="monitorBar" style="width:0%"></div></div>
-</div>
-<table class="step-table"><thead><tr><th>#</th><th>Step</th><th>Status</th></tr></thead><tbody id="stepsBody"></tbody></table>
-</div>
-</div>
-
-<div class="panel" id="pPatch">
-<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Patch Review</span></div>
-<div class="panel-bd" id="patchBody"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg><small>Select a file in Explorer</small></div></div>
-</div>
-</div>
+  <section class="panel" aria-label="Inspector">
+    <div class="plate-hd">
+      <span class="plate-title"><span class="plate-index">03</span><span class="plate-name">Inspector</span></span>
+    </div>
+    <div class="plate-bd" id="execBody"><div class="empty">Click a star in the chart to inspect it.</div></div>
+  </section>
 
 </div>
 
-<div class="statusrow"><div class="panel" style="margin:0">
-<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Runtime Status</span></div>
-<div class="panel-bd"><div class="status-grid" id="runtimeGrid"></div></div>
+<div class="deck">
+
+  <section class="panel" aria-label="Context inspector">
+    <div class="plate-hd"><span class="plate-title"><span class="plate-index">04</span><span class="plate-name">Context</span></span></div>
+    <div class="plate-bd">
+      <input class="ctx-input" type="text" id="ctxQuery" placeholder="Ask the repo — e.g. how does import resolution work?" aria-label="Context query">
+      <div class="ctx-stats" id="ctxStats" style="display:none"></div>
+      <div id="ctxFiles"></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Execution monitor">
+    <div class="plate-hd">
+      <span class="plate-title"><span class="plate-index">05</span><span class="plate-name">Monitor</span></span>
+      <span id="monitorStatus" style="font-size:.6rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)">Idle</span>
+    </div>
+    <div class="plate-bd">
+      <div class="exec-progress">
+        <div class="progress-label"><span>Pipeline progress</span><b id="monitorPct">0%</b></div>
+        <div class="progress-bar"><div class="progress-fill" id="monitorBar" style="width:0%"></div></div>
+      </div>
+      <table class="step-table"><thead><tr><th>Step</th><th>Source</th></tr></thead><tbody id="stepsBody"></tbody></table>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Patch review">
+    <div class="plate-hd"><span class="plate-title"><span class="plate-index">06</span><span class="plate-name">Patch Review</span></span></div>
+    <div class="plate-bd" id="patchBody"><div class="empty">Open a file in the Explorer to review it.</div></div>
+  </section>
+
 </div>
 
-<div class="panel" style="margin:0">
-<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Performance</span></div>
-<div class="panel-bd"><div class="perf-grid" id="perfGrid"></div></div>
-</div>
+<div class="statusrow">
 
-<div class="panel" style="margin:0">
-<div class="panel-hd"><span class="panel-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Recent Events</span></div>
-<div class="panel-bd"><div class="events-list" id="eventsBody"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><small>No events</small></div></div></div>
-</div>
-</div>
-</div>
+  <section class="panel" aria-label="Runtime status">
+    <div class="plate-hd"><span class="plate-title"><span class="plate-index">07</span><span class="plate-name">Runtime</span></span></div>
+    <div class="plate-bd"><div class="stat-grid2" id="runtimeGrid"></div></div>
+  </section>
 
+  <section class="panel" aria-label="Performance">
+    <div class="plate-hd"><span class="plate-title"><span class="plate-index">08</span><span class="plate-name">Telemetry</span></span></div>
+    <div class="plate-bd"><div class="perf-grid" id="perfGrid"></div></div>
+  </section>
+
+  <section class="panel" aria-label="Event log">
+    <div class="plate-hd"><span class="plate-title"><span class="plate-index">09</span><span class="plate-name">Signal Log</span></span></div>
+    <div class="plate-bd" id="eventsBody"><div class="empty">Waiting for events…</div></div>
+  </section>
+
+</div>
 </div>
 
 <div class="modal" id="mAdd">
-<div class="modal-box">
-<div class="modal-hd"><span class="modal-title">Add Repository</span><button class="modal-close" onclick="mAdd.classList.remove('open')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-<div class="form-group"><label class="form-label">Local Path or Git URL</label><input class="form-input" id="repoPathInput" placeholder="C:\Users\Name\project or https://github.com/user/repo"><span class="form-hint">Local folders indexed directly. Git URLs cloned and indexed.</span></div>
-<div class="modal-actions"><button class="btn btn-secondary" onclick="mAdd.classList.remove('open')">Cancel</button><button class="btn btn-primary" onclick="addRepo()">Add & Index</button></div>
-</div>
+  <div class="modal-box">
+    <div class="modal-hd">
+      <span class="modal-title">Add repository</span>
+      <button class="act-btn" onclick="mAdd.classList.remove('open')" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="repoPathInput">Local path</label>
+      <input class="form-input" type="text" id="repoPathInput" placeholder="F:\projects\my-repo">
+      <div class="form-hint">The folder is registered and indexed in place.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="mAdd.classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" onclick="addRepo()">Index &amp; open</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Shared State ───────────────────────────────────────────────────────
-const App = {
-  repos: [],
-  curRepo: null,
-  graph: { nodes: [], edges: [] },
-  pos: {},
-  selNodeId: null,
-  selectedFile: null,
-  gCanvas: document.getElementById('gCanvas'),
-  ctx: null,
-  gVx: 0, gVy: 0, gSc: 1,
-  dragging: false, mx0: 0, my0: 0,
-  animId: null,
-  tick: 0,
-  NODE_RADIUS: 12,
-  init() {
-    this.ctx = this.gCanvas.getContext('2d');
-  }
+'use strict';
+// ── Constants ──────────────────────────────────────────────────────────
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ir.models.NodeType is an auto() int enum — the graph API serializes .value.
+const TYPE_BY_ID = {
+  1:'File', 2:'Function', 3:'Class', 4:'Method', 5:'Module',
+  6:'Variable', 7:'Constant', 8:'Vault Concept', 9:'Decision',
+  10:'Pattern', 11:'Conflict', 12:'Config',
 };
-App.init();
-let repos = App.repos, curRepo = App.curRepo;
-let graph = App.graph, pos = App.pos, tick = App.tick ?? 0,
-    gCanvas = App.gCanvas, ctx = App.ctx, selNodeId = App.selNodeId,
-    selectedFile = App.selectedFile, gVx = App.gVx, gVy = App.gVy, gSc = App.gSc,
-    dragging = App.dragging, mx0 = App.mx0, my0 = App.my0, animId = App.animId,
-    NODE_RADIUS = App.NODE_RADIUS;
+const TYPE_COLOR = {
+  'File':'#d9a84e', 'Function':'#63d3ea', 'Class':'#9d7bff',
+  'Method':'#8ab8ff', 'Module':'#5bd692', 'Variable':'#7ee8a2',
+  'Constant':'#b8e07e', 'Vault Concept':'#f08fd0', 'Decision':'#ffb454',
+  'Pattern':'#ff9de2', 'Conflict':'#ff6b6b', 'Config':'#c9a227',
+};
+const typeName = t => typeof t === 'number' ? (TYPE_BY_ID[t] || 'Node')
+  : (TYPE_BY_ID[+t] || String(t).charAt(0).toUpperCase() + String(t).slice(1));
+const typeColor = t => TYPE_COLOR[typeName(t)] || '#8891b8';
 
-// ── API helper ────────────────────────────────────────────────────────
+// ── State ──────────────────────────────────────────────────────────────
+let repos = [], curRepo = null, graph = {nodes:[],edges:[]}, pos = {};
+let selNodeId = null, hoverNodeId = null, selectedFile = null;
+let gSc = 1, gVx = 0, gVy = 0, dragging = false, mx0 = 0, my0 = 0;
+let animId = null, settled = false, tickN = 0, degree = {};
+const gCanvas = document.getElementById('gCanvas');
+const ctx2d = gCanvas.getContext('2d');
+const phases = [];
+
+// ── Utils ──────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fmt = n => (n ?? 0).toLocaleString();
+const ago = s => { if(!s) return '—'; const d = Math.round((Date.now()-new Date(s))/1000);
+  return d<60 ? d+'s ago' : d<3600 ? Math.round(d/60)+'m ago' : d<86400 ? Math.round(d/3600)+'h ago' : Math.round(d/86400)+'d ago'; };
+function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function toast(msg, err){
+  const el = document.createElement('div');
+  el.className = 'toast-item' + (err ? ' error' : '');
+  el.textContent = msg;
+  $('toast').appendChild(el);
+  setTimeout(() => el.remove(), 4200);
+}
 async function api(method, path, body){
-  const opts={headers:{'Accept':'application/json'}};
-  if(body){opts.method='POST';opts.body=JSON.stringify(body);opts.headers['Content-Type']='application/json'}
-  const r=await fetch(path,opts);if(!r.ok){const t=await r.text();throw new Error(t.slice(0,200))}
-  return method==='GET'?r.json():r.json()
+  const opts = {headers:{'Accept':'application/json'}};
+  if(body){ opts.method='POST'; opts.body=JSON.stringify(body); opts.headers['Content-Type']='application/json'; }
+  const r = await fetch(path, opts);
+  if(!r.ok) throw new Error((await r.text()).slice(0,180));
+  return r.json();
 }
+const fileName = p => String(p||'').split('/').pop().split('\\').pop();
 
-// ── Init ──────────────────────────────────────────────────────────────
-async function init(){
-  await loadOverview();
-  setupCanvas();
-  setInterval(loadOverview, 8000);
-  setInterval(loadEvents, 5000);
-  document.getElementById('ctxQuery').addEventListener('input',()=>{
-    clearTimeout(window.ctxTimer);window.ctxTimer=setTimeout(loadContext,400);
-  });
-  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='n'){e.preventDefault();mAdd.classList.add('open')}});
-}
-init();
-
-// ── Load Overview ─────────────────────────────────────────────────────
+// ── Overview polling ───────────────────────────────────────────────────
 async function loadOverview(){
   try{
-    const d=await api('GET','/api/status');
-    App.repos.length=0; App.repos.push(...(d.repos_detail||[]));
+    const d = await api('GET','/api/status');
+    repos = d.repos_detail || [];
     renderMetrics(d);
     renderRepoSelect();
     renderRuntime(d);
     renderPerf(d);
-    if(App.repos.length&&!App.curRepo) selectRepo(App.repos[0]);
-    const sb=document.getElementById('statusBadge');
-    if(sb) sb.textContent=d.status+' · '+d.repos+' repos';
-  }catch(e){console.error('overview',e)}
+    if(repos.length && !curRepo) selectRepo(repos[0]);
+  }catch(e){ console.error('overview', e); }
 }
 
-// ── Metrics ───────────────────────────────────────────────────────────
 function renderMetrics(d){
-  const r=d.repos_detail||[];
-  const tf=r.reduce((a,x)=>a+x.files,0), tn=r.reduce((a,x)=>a+x.nodes,0), te=r.reduce((a,x)=>a+x.edges,0);
-  const up=d.metrics?.length||0;
-  const last=repos.length?repos[0].last_indexed:'—';
-  document.getElementById('metricsRow').innerHTML=`
-<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><div class="metric-lbl">Repositories</div><div class="metric-val">${d.repos}</div><div class="metric-sub positive">Active</div></div>
-<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><div class="metric-lbl">Files</div><div class="metric-val">${fmt(tf)}</div><div class="metric-sub info">Indexed</div></div>
-<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="M3 12h18"/></svg><div class="metric-lbl">Symbols</div><div class="metric-val">${fmt(tn*5)}</div><div class="metric-sub info">Estimated</div></div>
-<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="3"/><line x1="12" y1="12" x2="19" y2="5"/></svg><div class="metric-lbl">Graph Nodes</div><div class="metric-val">${fmt(tn)}</div><div class="metric-sub positive">+${fmt(tn)}</div></div>
-<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="13" x2="6" y2="3"/><line x1="6" y1="21" x2="6" y2="9"/></svg><div class="metric-lbl">Graph Edges</div><div class="metric-val">${fmt(te)}</div><div class="metric-sub positive">+${fmt(te)}</div></div>
-<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><div class="metric-lbl">Last Scan</div><div class="metric-val">${last!=='—'?ago(last):'—'}</div><div class="metric-sub amber">Incremental</div></div>
-<div class="metric"><svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><div class="metric-lbl">Context Packs</div><div class="metric-val">${up}</div><div class="metric-sub info">Generated</div></div>
-`;
+  const tf = repos.reduce((a,x)=>a+(x.files||0),0);
+  const tn = repos.reduce((a,x)=>a+(x.nodes||0),0);
+  const te = repos.reduce((a,x)=>a+(x.edges||0),0);
+  const last = repos.length ? repos.map(r=>r.last_indexed).sort().pop() : null;
+  $('metricsRow').innerHTML = `
+  <div class="stat"><div class="stat-lbl">Repositories</div><div class="stat-val">${fmt(d.repos)}</div><div class="stat-sub">${repos.filter(r=>r.status==='active').length} active</div></div>
+  <div class="stat"><div class="stat-lbl">Files Indexed</div><div class="stat-val">${fmt(tf)}</div><div class="stat-sub">full corpus</div></div>
+  <div class="stat"><div class="stat-lbl">Graph Nodes</div><div class="stat-val">${fmt(tn)}</div><div class="stat-sub">stars on chart</div></div>
+  <div class="stat"><div class="stat-lbl">Graph Edges</div><div class="stat-val">${fmt(te)}</div><div class="stat-sub">relations traced</div></div>
+  <div class="stat"><div class="stat-lbl">Last Scan</div><div class="stat-val" style="font-size:.95rem">${last?ago(last):'—'}</div><div class="stat-sub">incremental, resumable</div></div>`;
 }
 
-// ── Repo Select ───────────────────────────────────────────────────────
 function renderRepoSelect(){
-  const s=document.getElementById('repoSelect');
-  s.innerHTML=repos.map(r=>`<option value="${r.path}">${r.name} (${r.nodes}n/${r.edges}e)</option>`).join('');
-  s.onchange=e=>{const r=repos.find(x=>x.path===e.target.value);if(r) selectRepo(r)};
-}
-async function selectRepo(r){
-  curRepo=r; window.__cur = r;
-  document.getElementById('repoSelect').value=r.path;
-  document.getElementById('explorerBody').innerHTML='<div class="empty-state">Loading...</div>';
-  Promise.all([loadExplorer(), loadGraph(), loadExec()]);
+  const s = $('repoSelect');
+  s.innerHTML = repos.length
+    ? repos.map(r=>`<option value="${esc(r.path)}">${esc(r.name)} · ${fmt(r.nodes)}n/${fmt(r.edges)}e</option>`).join('')
+    : '<option value="">No repositories yet</option>';
+  s.onchange = e => { const r = repos.find(x=>x.path===e.target.value); if(r) selectRepo(r); };
+  if(curRepo) s.value = curRepo.path;
 }
 
-// ── Explorer ──────────────────────────────────────────────────────────
+async function selectRepo(r){
+  curRepo = r;
+  $('repoSelect').value = r.path;
+  $('explorerBody').innerHTML = '<div class="empty">Loading…</div>';
+  $('execBody').innerHTML = '<div class="empty">Click a star in the chart to inspect it.</div>';
+  selNodeId = null; selectedFile = null;
+  $('patchBody').innerHTML = '<div class="empty">Open a file in the Explorer to review it.</div>';
+  await Promise.all([loadExplorer(), loadGraph(), loadExec()]);
+}
+
+// ── Explorer ───────────────────────────────────────────────────────────
 async function loadExplorer(){
   if(!curRepo) return;
   try{
-    const d=await api('GET',`/api/explorer?path=${encodeURIComponent(curRepo.path)}`);
-    document.getElementById('explorerBody').innerHTML=buildTree(d.tree||d,0);
+    const d = await api('GET', `/api/explorer?path=${encodeURIComponent(curRepo.path)}`);
+    const tree = d.tree;
+    let n = 0; (function count(x){ if(!x) return; n++; (x.children||[]).forEach(count); })(tree);
+    $('explorerCount').textContent = fmt(n) + ' entries';
+    $('explorerBody').innerHTML = buildTree(tree, 0);
   }catch(e){
-    document.getElementById('explorerBody').innerHTML=`<div class="empty-state">${curRepo.name} (${curRepo.files} files)</div>`;
+    $('explorerBody').innerHTML = `<div class="empty">Could not list ${esc(curRepo.name)}.</div>`;
   }
 }
-function buildTree(n,depth){
+function buildTree(n, depth){
   if(!n) return '';
-  const kids=n.children;
-  const isDir=kids&&kids.length;
-  const path=n.path||n.name;
-  let classes='tree-item'+(isDir?' dir':' file');
-  if(path===selectedFile) classes+=' selected';
-  let html=`<div class="${classes}" style="padding-left:${8+depth*14}px" data-path="${escAttr(path)}" data-dir="${isDir?1:0}">${isDir?'📁':'📄'} ${n.name}</div>`;
-  if(isDir){
-    const ch=kids.filter(c=>c).slice(0,100).map(c=>buildTree(c,depth+1)).join('');
-    if(kids.length>100) html+=`<div class="tree-item" style="padding-left:${8+(depth+1)*14}px;color:var(--accent);font-size:10px">...${kids.length-100} more</div>`;
-    html='<div>'+html+ch+'</div>';
+  const kids = (n.children||[]).filter(Boolean);
+  const isDir = kids.length > 0 || (!n.path && n.children === undefined);
+  const isLeafDir = !kids.length && n.children !== null && n.name && !n.path;
+  const dir = isDir || isLeafDir;
+  const path = n.path || n.name;
+  const cls = 'tree-item ' + (dir?'dir':'file') + (path===selectedFile?' selected':'');
+  const glyph = dir
+    ? '<svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
+    : '<svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+  let html = `<div class="${cls}" style="padding-left:${.35+depth*.85}rem" data-path="${esc(path)}" data-dir="${dir?1:0}" title="${esc(path)}">${glyph}<span>${esc(n.name)}</span></div>`;
+  if(kids.length){
+    const shown = kids.slice(0,80).map(c=>buildTree(c,depth+1)).join('');
+    const more = kids.length>80 ? `<div class="tree-item" style="padding-left:${.35+(depth+1)*.85}rem;color:var(--mute)">…${kids.length-80} more</div>` : '';
+    html = `<div>${html}${shown}${more}</div>`;
   }
   return html;
 }
-function esc(s){return s.replace(/'/g,"\\'").replace(/"/g,'\\"')}
+document.addEventListener('click', e=>{
+  const item = e.target.closest('.tree-item');
+  if(item && item.dataset.path) clickTreeItem(item.dataset.path, item.dataset.dir==='1');
+});
 function clickTreeItem(path, isDir){
   if(isDir) return;
-  selectedFile=path;
-  document.querySelectorAll('.tree-item.selected').forEach(e=>e.classList.remove('selected'));
-  document.querySelectorAll('.tree-item').forEach(e=>{if(e.textContent.includes(path.split('/').pop())||e.textContent.includes(path.split('\\').pop()))e.classList.add('selected')});
+  selectedFile = path;
+  document.querySelectorAll('.tree-item.selected').forEach(el=>el.classList.remove('selected'));
+  document.querySelectorAll('.tree-item').forEach(el=>{ if(el.dataset.path===path) el.classList.add('selected'); });
   loadDiff(path);
-  loadContextForFile(path);
+  $('ctxQuery').value = fileName(path);
+  loadContext();
 }
+
+// ── Patch review ───────────────────────────────────────────────────────
 async function loadDiff(filePath){
   if(!curRepo) return;
   try{
-    const d=await api('GET',`/api/patch/diff?path=${encodeURIComponent(curRepo.path)}&file_path=${encodeURIComponent(filePath)}`);
-    const el=document.getElementById('patchBody');
-    if(!d.lines||!d.lines.length){el.innerHTML=`<div class="empty-state">${d.message||'No content'}</div>`;return}
-    el.innerHTML=`<div style="font-size:10px;color:var(--muted);margin-bottom:6px">${d.file.split('/').pop().split('\\').pop()} · ${d.total} lines</div>
-<div class="diff-block">${d.lines.slice(0,150).map(l=>`<div class="diff-${l.type}"><span class="diff-line-num">${l.num}</span>${esc(l.text)}</div>`).join('')}</div>
-<div class="patch-actions">
-<button class="btn btn-primary" style="padding:4px 10px;font-size:10px" onclick="alert('Patch approve — backend ready')">Approve</button>
-<button class="btn btn-secondary" style="padding:4px 10px;font-size:10px">Reject</button>
-</div>`;
-  }catch(e){console.error('diff',e)}
-}
-async function loadContextForFile(filePath){
-  if(!curRepo) return;
-  document.getElementById('ctxQuery').value=filePath.split('/').pop().split('\\').pop();
-  await loadContext();
+    const d = await api('GET', `/api/patch/diff?path=${encodeURIComponent(curRepo.path)}&file_path=${encodeURIComponent(filePath)}`);
+    const el = $('patchBody');
+    if(!d.lines || !d.lines.length){ el.innerHTML = `<div class="empty">${esc(d.message||'Nothing to review.')}</div>`; return; }
+    el.innerHTML = `
+    <div class="patch-meta">${esc(fileName(d.file))} · ${fmt(d.total)} lines</div>
+    <div class="diff-block">${d.lines.slice(0,140).map(l=>`<div class="diff-${l.type==='add'?'add':l.type==='del'?'del':'ctx'}"><span class="diff-line-num">${l.num}</span><span class="diff-${l.type==='add'?'add':l.type==='del'?'del':'ctx'}">${esc(l.text)||' '}</span></div>`).join('')}</div>
+    <div class="patch-actions">
+      <button class="btn btn-primary btn-sm" disabled title="Compose old_text/new_text first">Apply patch</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadDiff(selectedFile)">Refresh</button>
+    </div>`;
+  }catch(e){ console.error('diff', e); }
 }
 
-// ── Graph ─────────────────────────────────────────────────────────────
+// ── Star chart ─────────────────────────────────────────────────────────
 async function loadGraph(){
   if(!curRepo) return;
   try{
-    const d=await api('GET',`/api/graph/sample?path=${encodeURIComponent(curRepo.path)}&limit=200`);
-    graph=d;initGraphLayout();if(!animId){animId=requestAnimationFrame(tickGraph)}
+    const d = await api('GET', `/api/graph/sample?path=${encodeURIComponent(curRepo.path)}&limit=180`);
+    graph = d;
+    degree = {};
+    (graph.edges||[]).forEach(e=>{ degree[e.source]=(degree[e.source]||0)+1; degree[e.target]=(degree[e.target]||0)+1; });
+    phases.length = 0;
+    graph.nodes.forEach((_,i)=>phases.push(i*2.399963));
+    initGraphLayout();
+    settled = false; tickN = 0;
+    if(!animId) animId = requestAnimationFrame(tickGraph);
     renderLegend(d);
-  }catch(e){console.error('graph',e)}
+    $('chartHud').textContent = `${curRepo.name.toUpperCase()} · ${graph.nodes.length} STARS SHOWN`;
+  }catch(e){ console.error('graph', e); }
 }
 function renderLegend(d){
-  const types=[...new Set((d.nodes||[]).map(n=>n.type))];
-  const colors={'Module':'#06b6d4','Class':'#a855f7','Function':'#3b82f6','File':'#f59e0b','Concept':'#10b981'};
-  document.getElementById('graphLegend').innerHTML=types.map(t=>`<div class="legend-item"><div class="legend-dot" style="background:${colors[t]||'#5a6577'}"></div>${t}</div>`).join('');
+  const types = [...new Set((d.nodes||[]).map(n=>typeName(n.type)))].sort();
+  $('graphLegend').innerHTML = types.map(t=>`<div class="legend-item"><span class="legend-dot" style="background:${typeColor(t)}"></span>${esc(t)}</div>`).join('');
 }
 function initGraphLayout(){
-  const {nodes,edges}=graph;pos={};
-  const w=gCanvas.parentElement.clientWidth,h=gCanvas.parentElement.clientHeight,cx=w/2,cy=h/2,R=Math.min(w,h)*0.35;
-  nodes.forEach((n,i)=>{const a=i/nodes.length*Math.PI*2;pos[n.id]={x:cx+Math.cos(a)*R,y:cy+Math.sin(a)*R,vx:0,vy:0}});
+  pos = {};
+  const w = gCanvas.parentElement.clientWidth || 800, h = gCanvas.parentElement.clientHeight || 500;
+  const cx=w/2, cy=h/2, R=Math.min(w,h)*.34;
+  graph.nodes.forEach((n,i)=>{
+    const a=i/graph.nodes.length*Math.PI*2;
+    pos[n.id]={x:cx+Math.cos(a)*R, y:cy+Math.sin(a)*R, vx:0, vy:0};
+  });
 }
 function tickGraph(){
-  tick++;
-  if(graph.nodes.length){
-    const {nodes,edges}=graph,k=20000;
-    const w=gCanvas.parentElement.clientWidth,h=gCanvas.parentElement.clientHeight;
-    const cx=w/2,cy=h/2;
-    nodes.forEach(n=>{const p=pos[n.id];if(!p)return;const dx=p.x-cx,dy=p.y-cy,d=Math.hypot(dx,dy)||1;p.vx+=dx/d*k/(d*d+1)*0.0003;p.vy+=dy/d*k/(d*d+1)*0.0003});
-    edges.forEach(e=>{const s=pos[e.source],t=pos[e.target];if(!s||!t)return;const dx=t.x-s.x,dy=t.y-s.y,d=Math.hypot(dx,dy)||1,f=k/d*0.0005;s.vx+=dx/d*f;s.vy+=dy/d*f;t.vx-=dx/d*f;t.vy-=dy/d*f});
-    nodes.forEach(n=>{const p=pos[n.id];if(!p)return;p.vx*=0.9;p.vy*=0.9;p.x+=p.vx;p.y+=p.vy;p.x=Math.max(30,Math.min(w-30,p.x));p.y=Math.max(30,Math.min(h-30,p.y))});
+  tickN++;
+  const {nodes,edges} = graph;
+  if(nodes.length && !settled){
+    const w=gCanvas.parentElement.clientWidth||800, h=gCanvas.parentElement.clientHeight||500;
+    const cx=w/2, cy=h/2;
+    let energy=0;
+    nodes.forEach(n=>{
+      const p=pos[n.id]; if(!p) return;
+      const dx=p.x-cx, dy=p.y-cy, d=Math.hypot(dx,dy)||1;
+      p.vx+=dx/d*6/(d*d+1)*30; p.vy+=dy/d*6/(d*d+1)*30;
+    });
+    edges.forEach(e=>{
+      const s=pos[e.source], t=pos[e.target]; if(!s||!t) return;
+      const dx=t.x-s.x, dy=t.y-s.y, d=Math.hypot(dx,dy)||1;
+      const f=10/d; s.vx+=dx/d*f; s.vy+=dy/d*f; t.vx-=dx/d*f; t.vy-=dy/d*f;
+    });
+    nodes.forEach(n=>{
+      const p=pos[n.id]; if(!p) return;
+      p.vx*=.86; p.vy*=.86;
+      p.x+=p.vx; p.y+=p.vy;
+      p.x=Math.max(24,Math.min(w-24,p.x)); p.y=Math.max(24,Math.min(h-24,p.y));
+      energy += Math.abs(p.vx)+Math.abs(p.vy);
+    });
+    if((tickN>60 && energy<nodes.length*.05) || tickN>500) settled=true;
     drawGraph();
-  }
-  animId=requestAnimationFrame(tickGraph);
+  } else if(tickN===1 || !settled===false && tickN<=2){ drawGraph(); }
+  if(!REDUCED || !settled) animId=requestAnimationFrame(tickGraph);
+  else animId=null;
 }
+function wake(){ if(settled){ settled=false; tickN=0; } if(!animId) animId=requestAnimationFrame(tickGraph); }
+
+function starRadius(n){ return 3 + Math.min(5.5,(degree[n.id]||0)*.55); }
 function drawGraph(){
-  const p=gCanvas.parentElement;
-  const w=p.clientWidth,h=p.clientHeight;
-  if(gCanvas.width!==w*devicePixelRatio||gCanvas.height!==h*devicePixelRatio){gCanvas.width=w*devicePixelRatio;gCanvas.height=h*devicePixelRatio}
-  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);ctx.clearRect(0,0,w,h);
+  const p=gCanvas.parentElement, w=p.clientWidth, h=p.clientHeight;
+  if(!w||!h) return;
+  const dpr=devicePixelRatio||1;
+  if(gCanvas.width!==w*dpr||gCanvas.height!==h*dpr){ gCanvas.width=w*dpr; gCanvas.height=h*dpr; }
+  const c=ctx2d;
+  c.setTransform(dpr,0,0,dpr,0,0);
+  c.clearRect(0,0,w,h);
+
+  // graticule — the observatory plate under the stars
+  c.save(); c.translate(gVx,gVy); c.scale(gSc,gSc);
+  const cx=w/2, cy=h/2, Rmax=Math.min(w,h)*.52;
+  c.strokeStyle='rgba(217,168,78,.055)'; c.lineWidth=1;
+  [.33,.66,1].forEach(f=>{ c.beginPath(); c.arc(cx,cy,Rmax*f,0,Math.PI*2); c.stroke(); });
+  for(let i=0;i<12;i++){
+    const a=i*Math.PI/6;
+    c.beginPath(); c.moveTo(cx+Math.cos(a)*Rmax*.33,cy+Math.sin(a)*Rmax*.33);
+    c.lineTo(cx+Math.cos(a)*Rmax,cy+Math.sin(a)*Rmax); c.stroke();
+  }
+
+  // trails
   const {nodes,edges}=graph;
-  ctx.lineWidth=1;ctx.strokeStyle='#1f252e';
-  edges.forEach(e=>{const s=pos[e.source],t=pos[e.target];if(!s||!t)return;ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(t.x,t.y);ctx.stroke()});
-  const colors={'Module':'#06b6d4','Class':'#a855f7','Function':'#3b82f6','File':'#f59e0b','Concept':'#10b981'};
-  nodes.forEach(n=>{const p=pos[n.id];if(!p)return;const r=selNodeId===n.id?16:10;
-  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fillStyle=colors[n.type]||'#5a6577';ctx.fill();
-  ctx.strokeStyle=selNodeId===n.id?'var(--accent)':'var(--bg)';ctx.lineWidth=selNodeId===n.id?3:2;ctx.stroke();
-  ctx.fillStyle='#e2e8f0';ctx.font='10px Inter,sans-serif';ctx.textAlign='center';ctx.fillText(n.name.slice(0,14),p.x,p.y+r+14)});
+  for(const e of edges){
+    const s=pos[e.source], t=pos[e.target]; if(!s||!t) continue;
+    const hot = selNodeId && (e.source===selNodeId||e.target===selNodeId);
+    c.strokeStyle = hot ? 'rgba(217,168,78,.5)' : 'rgba(148,162,214,.13)';
+    c.lineWidth = hot ? 1.4 : .8;
+    c.beginPath(); c.moveTo(s.x,s.y); c.lineTo(t.x,t.y); c.stroke();
+  }
+
+  // stars
+  const now=performance.now()/1000;
+  nodes.forEach((n,i)=>{
+    const p=pos[n.id]; if(!p) return;
+    const r=starRadius(n)+(selNodeId===n.id?2.5:0)+(hoverNodeId===n.id?1.2:0);
+    const col=typeColor(n.type);
+    const tw = REDUCED ? 0 : Math.sin(now*1.1+phases[i%phases.length])*.14+.86;
+    // halo
+    const g=c.createRadialGradient(p.x,p.y,0,p.x,p.y,r*3.2);
+    g.addColorStop(0,col+'55'); g.addColorStop(1,col+'00');
+    c.globalAlpha=tw; c.fillStyle=g;
+    c.beginPath(); c.arc(p.x,p.y,r*3.2,0,Math.PI*2); c.fill();
+    // core
+    c.fillStyle=col;
+    c.beginPath(); c.arc(p.x,p.y,r,0,Math.PI*2); c.fill();
+    c.globalAlpha=1;
+    // reticle on selection
+    if(selNodeId===n.id){
+      c.strokeStyle='#d9a84e'; c.lineWidth=1;
+      const rr=r+7;
+      c.beginPath(); c.arc(p.x,p.y,rr,0,Math.PI*2); c.stroke();
+      [[rr+3,0,rr+9,0],[-rr-3,0,-rr-9,0],[0,rr+3,0,rr+9],[0,-rr-3,0,-rr-9]].forEach(([a,b,x,y])=>{
+        c.beginPath(); c.moveTo(p.x+a,p.y+b); c.lineTo(p.x+x,p.y+y); c.stroke();
+      });
+    }
+  });
+
+  // labels: selected + hovered + top-degree
+  const labeled=new Set([selNodeId,hoverNodeId].filter(Boolean));
+  [...nodes].sort((a,b)=>(degree[b.id]||0)-(degree[a.id]||0)).slice(0,7).forEach(n=>labeled.add(n.id));
+  c.font='10px "IBM Plex Mono",monospace'; c.textAlign='center';
+  nodes.forEach(n=>{
+    if(!labeled.has(n.id)) return;
+    const p=pos[n.id]; if(!p) return;
+    c.fillStyle='rgba(233,237,250,.85)';
+    c.fillText(String(n.name).slice(0,18), p.x, p.y+starRadius(n)+13);
+  });
+  c.restore();
 }
-function escAttr(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
-document.addEventListener('click',e=>{
-  const item=e.target.closest('.tree-item');
-  if(!item||!item.dataset.path) return;
-  clickTreeItem(item.dataset.path, item.dataset.dir==='1');
-});
 function setupCanvas(){
-  gCanvas.addEventListener('mousedown',e=>{if(e.button===0){dragging=true;mx0=e.clientX;my0=e.clientY;gCanvas.style.cursor='grabbing'}});
-  window.addEventListener('mousemove',e=>{if(dragging){gVx+=e.clientX-mx0;gVy+=e.clientY-my0;mx0=e.clientX;my0=e.clientY}});
-  window.addEventListener('mouseup',()=>{dragging=false;gCanvas.style.cursor='default'});
+  gCanvas.addEventListener('mousedown',e=>{ if(e.button===0){ dragging=true; mx0=e.clientX; my0=e.clientY; gCanvas.classList.add('dragging'); } });
+  window.addEventListener('mousemove',e=>{
+    if(dragging){ gVx+=e.clientX-mx0; gVy+=e.clientY-my0; mx0=e.clientX; my0=e.clientY; drawGraph(); }
+  });
+  window.addEventListener('mouseup',()=>{ dragging=false; gCanvas.classList.remove('dragging'); });
+  gCanvas.addEventListener('mousemove',e=>{
+    if(dragging) return;
+    const rect=gCanvas.getBoundingClientRect();
+    const ex=(e.clientX-rect.left-gVx)/gSc, ey=(e.clientY-rect.top-gVy)/gSc;
+    let found=null;
+    for(const n of graph.nodes){ const p=pos[n.id]; if(p&&Math.hypot(ex-p.x,ey-p.y)<starRadius(n)+7){ found=n; break; } }
+    if(found!==hoverNodeId){ hoverNodeId=found?found.id:null; gCanvas.style.cursor=found?'pointer':'grab'; if(settled) drawGraph(); }
+  });
   gCanvas.addEventListener('click',e=>{
     const rect=gCanvas.getBoundingClientRect();
     const ex=(e.clientX-rect.left-gVx)/gSc, ey=(e.clientY-rect.top-gVy)/gSc;
-    for(const n of graph.nodes){const p=pos[n.id];if(p&&Math.hypot(ex-p.x,ey-p.y)<18){selNodeId=n.id;renderExecDetails(n);crossLinkGraphToContext(n);return}}
-    selNodeId=null;loadExec();
+    for(const n of graph.nodes){
+      const p=pos[n.id];
+      if(p&&Math.hypot(ex-p.x,ey-p.y)<starRadius(n)+7){
+        selNodeId=n.id; renderExecDetails(n); wake();
+        $('ctxQuery').value=n.name; loadContext();
+        return;
+      }
+    }
+    selNodeId=null; loadExec(); if(settled) drawGraph();
   });
+  new ResizeObserver(()=>{ if(settled) drawGraph(); }).observe(gCanvas.parentElement);
 }
-function crossLinkGraphToContext(n){
-  document.getElementById('ctxQuery').value=n.name;
-  loadContext();
-}
-function zoomG(f){gSc=Math.max(0.2,Math.min(5,gSc*f))}
-function centerG(){gVx=0;gVy=0;gSc=1;initGraphLayout()}
-function relayout(){initGraphLayout()}
+function zoomG(f){ gSc=Math.max(.25,Math.min(5,gSc*f)); wake(); }
+function centerG(){ gVx=0; gVy=0; gSc=1; initGraphLayout(); settled=false; tickN=0; wake(); }
+function relayout(){ initGraphLayout(); settled=false; tickN=0; wake(); }
 
-// ── Execution Details ─────────────────────────────────────────────────
+// ── Inspector ──────────────────────────────────────────────────────────
 function renderExecDetails(n){
-  const el=document.getElementById('execBody');
-  if(!n){loadExec();return}
-  const typeNames={1:'File',2:'Function',3:'Class',4:'Method',5:'Module',8:'Concept',12:'Config'};
-  el.innerHTML=`
-<div class="detail-row"><span class="detail-lbl">Type</span><span class="detail-val">${typeNames[n.type]||n.type}</span></div>
-<div class="detail-row"><span class="detail-lbl">Name</span><span class="detail-val accent">${n.name}</span></div>
-<div class="detail-row"><span class="detail-lbl">ID</span><span class="detail-val">${n.id.slice(0,24)}…</span></div>
-<div class="detail-row"><span class="detail-lbl">Repo</span><span class="detail-val">${curRepo?.name||'—'}</span></div>
-<div class="detail-row"><span class="detail-lbl">Dependencies</span><span class="detail-val" id="depCount">…</span></div>
-<div class="detail-row"><span class="detail-lbl">Dependents</span><span class="detail-val" id="depOnCount">…</span></div>`;
+  if(!n){ loadExec(); return; }
+  const deps=n.id;
+  $('execBody').innerHTML=`
+  <div class="detail-row"><span class="detail-lbl">Spectral type</span><span class="detail-val" style="color:${typeColor(n.type)}">${esc(typeName(n.type))}</span></div>
+  <div class="detail-row"><span class="detail-lbl">Designation</span><span class="detail-val accent" title="${esc(n.name)}">${esc(n.name)}</span></div>
+  <div class="detail-row"><span class="detail-lbl">Catalogue ID</span><span class="detail-val" title="${esc(n.id)}">${esc(String(n.id).slice(0,26))}…</span></div>
+  <div class="detail-row"><span class="detail-lbl">Constellation</span><span class="detail-val">${esc(curRepo?.name||'—')}</span></div>
+  <div class="detail-row"><span class="detail-lbl">Links out</span><span class="detail-val" id="depCount">…</span></div>
+  <div class="detail-row"><span class="detail-lbl">Links in</span><span class="detail-val" id="depOnCount">…</span></div>
+  <div id="depLists"></div>`;
   if(curRepo){
-    api('GET',`/api/graph/node?path=${encodeURIComponent(curRepo.path)}&node_id=${encodeURIComponent(n.id)}`)
+    api('GET', `/api/graph/node?path=${encodeURIComponent(curRepo.path)}&node_id=${encodeURIComponent(n.id)}`)
       .then(d=>{
         if(d.error) return;
-        document.getElementById('depCount').textContent=d.dependency_count+' ('+d.dependencies.slice(0,3).map(x=>x.name).join(', ')+(d.dependencies.length>3?', …':'')+')';
-        document.getElementById('depOnCount').textContent=d.dependent_count+' ('+d.dependents.slice(0,3).map(x=>x.name).join(', ')+(d.dependents.length>3?', …':'')+')';
+        $('depCount').textContent=`${d.dependency_count}`;
+        $('depOnCount').textContent=`${d.dependent_count}`;
+        $('depLists').innerHTML=
+          `<div class="detail-row" style="display:block"><span class="detail-lbl">Depends on</span><br>${d.dependencies.slice(0,5).map(x=>`<span class="dep-chip" title="${esc(x.id)}">${esc(x.name)}</span>`).join('')||'<span class="detail-val">—</span>'}</div>`+
+          `<div class="detail-row" style="display:block"><span class="detail-lbl">Depended on by</span><br>${d.dependents.slice(0,5).map(x=>`<span class="dep-chip" title="${esc(x.id)}">${esc(x.name)}</span>`).join('')||'<span class="detail-val">—</span>'}</div>`;
       }).catch(()=>{});
   }
 }
 async function loadExec(){
-  if(!curRepo) return;
+  if(!curRepo){ $('execBody').innerHTML='<div class="empty">Register a repository to see pipeline state.</div>'; return; }
   try{
     const d=await api('GET',`/api/execution?path=${encodeURIComponent(curRepo.path)}`);
-    const el=document.getElementById('execBody');
-    el.innerHTML=`
-<div class="detail-row"><span class="detail-lbl">Repository</span><span class="detail-val accent">${d.repo}</span></div>
-<div class="detail-row"><span class="detail-lbl">Status</span><span class="detail-val ok">${d.status}</span></div>
-<div class="detail-row"><span class="detail-lbl">Files</span><span class="detail-val">${fmt(d.files)}</span></div>
-<div class="detail-row"><span class="detail-lbl">Nodes</span><span class="detail-val">${fmt(d.nodes)}</span></div>
-<div class="detail-row"><span class="detail-lbl">Edges</span><span class="detail-val">${fmt(d.edges)}</span></div>
-<div class="detail-row"><span class="detail-lbl">Last Indexed</span><span class="detail-val">${ago(d.last_indexed)}</span></div>
-`;
+    $('execBody').innerHTML=`
+    <div class="detail-row"><span class="detail-lbl">Repository</span><span class="detail-val accent">${esc(d.repo)}</span></div>
+    <div class="detail-row"><span class="detail-lbl">Pipeline</span><span class="detail-val ok">${esc(d.status)}</span></div>
+    <div class="detail-row"><span class="detail-lbl">Files</span><span class="detail-val">${fmt(d.files)}</span></div>
+    <div class="detail-row"><span class="detail-lbl">Nodes</span><span class="detail-val">${fmt(d.nodes)}</span></div>
+    <div class="detail-row"><span class="detail-lbl">Edges</span><span class="detail-val">${fmt(d.edges)}</span></div>
+    <div class="detail-row"><span class="detail-lbl">Last indexed</span><span class="detail-val">${ago(d.last_indexed)}</span></div>`;
   }catch(e){}
 }
 
-// ── Context ───────────────────────────────────────────────────────────
+// ── Context ────────────────────────────────────────────────────────────
+let ctxTimer=null;
 async function loadContext(){
   if(!curRepo) return;
-  const q=document.getElementById('ctxQuery').value.trim();
-  if(!q){document.getElementById('ctxStats').style.display='none';document.getElementById('ctxFiles').innerHTML='';return}
+  const q=$('ctxQuery').value.trim();
+  if(!q){ $('ctxStats').style.display='none'; $('ctxFiles').innerHTML=''; return; }
   try{
     const d=await api('GET',`/api/context?path=${encodeURIComponent(curRepo.path)}&query=${encodeURIComponent(q)}&max_tokens=8000`);
-    document.getElementById('ctxStats').style.display='grid';
-    document.getElementById('ctxStats').innerHTML=`
-<div class="ctx-stat"><div class="ctx-stat-lbl">Tokens</div><div class="ctx-stat-val">${fmt(d.estimated_tokens)}</div></div>
-<div class="ctx-stat"><div class="ctx-stat-lbl">Files</div><div class="ctx-stat-val">${d.node_count}</div></div>
-<div class="ctx-stat"><div class="ctx-stat-lbl">Symbols</div><div class="ctx-stat-val">${fmt(d.node_count*5)}</div></div>
-<div class="ctx-stat"><div class="ctx-stat-lbl">Score</div><div class="ctx-stat-val">${d.score.toFixed(2)}</div></div>
-`;
-    document.getElementById('ctxFiles').innerHTML=(d.nodes||[]).slice(0,12).map(n=>{
-      const c=n.type==='Class'?'#a855f7':n.type==='Function'?'#3b82f6':'#06b6d4';
-      return `<div class="topfile"><span class="tf-name" title="${n.file_path||n.name}">${n.name}</span><div class="tf-bar"><div class="tf-fill" style="width:${(d.score*100).toFixed(0)}%;background:${c}"></div></div><span class="tf-score" style="color:${c}">${(d.score*100).toFixed(0)}%</span></div>`;
+    $('ctxStats').style.display='grid';
+    $('ctxStats').innerHTML=`
+    <div class="ctx-stat"><div class="ctx-stat-lbl">Tokens</div><div class="ctx-stat-val">${fmt(d.estimated_tokens)}</div></div>
+    <div class="ctx-stat"><div class="ctx-stat-lbl">Nodes</div><div class="ctx-stat-val">${fmt(d.node_count)}</div></div>
+    <div class="ctx-stat"><div class="ctx-stat-lbl">Edges</div><div class="ctx-stat-val">${fmt(d.edge_count)}</div></div>
+    <div class="ctx-stat"><div class="ctx-stat-lbl">Confidence</div><div class="ctx-stat-val">${(d.score??0).toFixed(2)}</div></div>`;
+    $('ctxFiles').innerHTML=(d.nodes||[]).slice(0,10).map(n=>{
+      const pct=Math.round((n.relevance??d.score??0)*100);
+      const col=typeColor(n.type);
+      return `<div class="topfile"><span class="tf-name" title="${esc(n.file_path||n.name)}">${esc(n.name)}</span><span class="tf-bar"><span class="tf-fill" style="width:${Math.max(4,Math.min(100,pct))}%;background:${col};display:block"></span></span><span class="tf-score" style="color:${col}">${pct}%</span></div>`;
     }).join('');
-  }catch(e){document.getElementById('ctxStats').style.display='none'}
+  }catch(e){ $('ctxStats').style.display='none'; }
 }
 
-// ── Events ───────────────────────────────────────────────────────────
+// ── Runtime / Telemetry / Signals ─────────────────────────────────────
+function renderRuntime(d){
+  const m=d.memory_mb||0;
+  const backends=[...new Set(repos.map(x=>x.backend||'duckdb'))].join(', ')||'duckdb';
+  $('runtimeGrid').innerHTML=`
+  <div class="mini-card"><div class="mini-title">Graph Store</div><div class="mini-row"><span class="mini-lbl">Health</span><span class="mini-val ok">Healthy</span></div><div class="mini-row"><span class="mini-lbl">Backend</span><span class="mini-val">${esc(backends)}</span></div></div>
+  <div class="mini-card"><div class="mini-title">Storage</div><div class="mini-row"><span class="mini-lbl">Nodes</span><span class="mini-val">${fmt(repos.reduce((a,x)=>a+(x.nodes||0),0))}</span></div><div class="mini-row"><span class="mini-lbl">Edges</span><span class="mini-val">${fmt(repos.reduce((a,x)=>a+(x.edges||0),0))}</span></div></div>
+  <div class="mini-card" style="grid-column:1/-1"><div class="mini-title">Process Memory</div><div class="mini-row"><span class="mini-lbl">RSS</span><span class="mini-val">${(m/1024).toFixed(2)} GB</span></div><div class="mem-gauge"><div class="mem-fill" style="width:${Math.min(100,m/16384*100)}%"></div></div></div>`;
+}
+
+const perfHistory={parse:[],query:[],context:[]};
+function pushHist(arr,v){ arr.push(v); if(arr.length>24) arr.shift(); }
+function renderPerf(d){
+  const raw=d.metrics;
+  const snaps=Array.isArray(raw) ? raw : (raw?.snapshots||[]);
+  const find=k=>snaps.filter(s=>s.name&&s.name.includes(k)).pop()?.value;
+  const parse=find('parse')??null, query=find('query')??null, ctxB=find('context')??null;
+  pushHist(perfHistory.parse, parse??perfHistory.parse.at(-1)??8);
+  pushHist(perfHistory.query, query??perfHistory.query.at(-1)??3);
+  pushHist(perfHistory.context, ctxB??perfHistory.context.at(-1)??40);
+  const card=(k,label,arr,fmtF)=>`
+  <div class="perf-card"><div class="perf-title">${label}</div><div class="perf-val" id="pv-${k}">${fmtF(arr.at(-1))}</div><canvas class="perf-canvas" id="pc-${k}"></canvas></div>`;
+  $('perfGrid').innerHTML=
+    card('parse','Parse',perfHistory.parse,v=>v.toFixed(1)+'ms')+
+    card('query','Graph Query',perfHistory.query,v=>v.toFixed(1)+'ms')+
+    card('context','Context Build',perfHistory.context,v=>v.toFixed(0)+'ms')+
+    `<div class="perf-card"><div class="perf-title">Uptime Signal</div><div class="perf-val" style="color:var(--green)">● LIVE</div><canvas class="perf-canvas" id="pc-live"></canvas></div>`;
+  drawSpark('pc-parse',perfHistory.parse,'#63d3ea');
+  drawSpark('pc-query',perfHistory.query,'#9d7bff');
+  drawSpark('pc-context',perfHistory.context,'#d9a84e');
+  drawSpark('pc-live',[1,1,1],'#5bd692',true);
+}
+function drawSpark(id,arr,color,flat){
+  const c=$(id); if(!c) return;
+  const dpr=devicePixelRatio||1, w=c.clientWidth||100, h=c.clientHeight||22;
+  c.width=w*dpr; c.height=h*dpr;
+  const x=c.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0);
+  x.clearRect(0,0,w,h);
+  if(arr.length<2) return;
+  const mn=Math.min(...arr), mx=Math.max(...arr), rng=(mx-mn)||1;
+  x.beginPath();
+  arr.forEach((v,i)=>{ const px=i/(arr.length-1)*(w-2)+1, py=h-2-((flat?.6:(v-mn)/rng))*(h-5); i?x.lineTo(px,py):x.moveTo(px,py); });
+  x.strokeStyle=color; x.lineWidth=1.3; x.stroke();
+}
+
 async function loadEvents(){
   try{
-    const evts=await api('GET','/api/logs?limit=30');
-    const el=document.getElementById('eventsBody');
-    if(!evts.length){el.innerHTML='<div class="empty-state">No events</div>';return}
-    el.innerHTML=evts.slice().reverse().slice(0,20).map(e=>`<div class="event-item"><span class="event-time">${e.timestamp?new Date(e.timestamp).toLocaleTimeString():'—'}</span><span class="event-type">${e.event||e.event_type||'event'}</span><span class="event-desc">${JSON.stringify(e.data||e.payload||{}).slice(0,80)}</span></div>`).join('');
+    const evts=await api('GET','/api/logs?limit=24');
+    const el=$('eventsBody');
+    if(!evts.length){ el.innerHTML='<div class="empty">Waiting for events…</div>'; return; }
+    el.innerHTML='<div class="events-list">'+evts.slice().reverse().slice(0,14).map(e=>
+      `<div class="event-item"><span class="event-time">${e.timestamp?new Date(e.timestamp).toLocaleTimeString():'—'}</span><span class="event-type">${esc(e.event||'event')}</span><span class="event-desc">${esc(JSON.stringify(e.data||{})).slice(0,90)}</span></div>`
+    ).join('')+'</div>';
   }catch(e){}
 }
 
-// ── Runtime Status ───────────────────────────────────────────────────
-function renderRuntime(d){
-  const r=repos[0]||{}, m=d.memory_mb||0;
-  const backends=[...new Set(repos.map(x=>x.backend||'duckdb'))].join(',');
-  document.getElementById('runtimeGrid').innerHTML=`
-<div class="stat-card"><div class="stat-title">Repositories</div><div class="stat-row"><span class="stat-label">Count</span><span class="stat-val ok">${d.repos}</span></div><div class="stat-row"><span class="stat-label">Total Files</span><span class="stat-val">${fmt(r.files||0)}</span></div></div>
-<div class="stat-card"><div class="stat-title">Graph Store</div><div class="stat-row"><span class="stat-label">Status</span><span class="stat-val ok">Healthy</span></div><div class="stat-row"><span class="stat-label">Backend</span><span class="stat-val">${backends||'DuckDB'}</span></div></div>
-<div class="stat-card"><div class="stat-title">Storage</div><div class="stat-row"><span class="stat-label">Backend</span><span class="stat-val">DuckDB</span></div><div class="stat-row"><span class="stat-label">Nodes</span><span class="stat-val">${fmt(r.nodes||0)}</span></div></div>
-<div class="stat-card"><div class="stat-title">Memory Usage</div><div class="stat-row"><span class="stat-label">RSS</span><span class="stat-val">${(m/1024).toFixed(1)} GB / 8 GB</span></div><div class="mem-gauge"><div class="mem-fill" style="width:${Math.min(100,m/8192*100)}%"></div></div></div>
-`;
-}
-
-// ── Performance ──────────────────────────────────────────────────────
-function renderPerf(d){
-  const m=d.metrics||[];
-  const parse=m.find(x=>x.name?.includes('parse'))?.value||.245;
-  const qry=m.find(x=>x.name?.includes('graph_query'))?.value||.038;
-  const ctx2=m.find(x=>x.name?.includes('context_build'))?.value||.612;
-  const llm=m.find(x=>x.name?.includes('llm'))?.value||2.41;
-  document.getElementById('perfGrid').innerHTML=`
-<div class="perf-card"><div class="perf-title">Parse Time</div><div class="perf-val">${(parse*1000).toFixed(0)}ms</div><canvas class="perf-canvas" id="pc1"></canvas></div>
-<div class="perf-card"><div class="perf-title">Graph Query</div><div class="perf-val">${(qry*1000).toFixed(0)}ms</div><canvas class="perf-canvas" id="pc2"></canvas></div>
-<div class="perf-card"><div class="perf-title">Context Build</div><div class="perf-val">${(ctx2*1000).toFixed(0)}ms</div><canvas class="perf-canvas" id="pc3"></canvas></div>
-<div class="perf-card"><div class="perf-title">LLM Response</div><div class="perf-val">${llm.toFixed(1)}s</div><canvas class="perf-canvas" id="pc4"></canvas></div>
-`;
-  drawSpark('pc1',parse);drawSpark('pc2',qry);drawSpark('pc3',ctx2);drawSpark('pc4',llm/10);
-}
-function drawSpark(id,v){
-  const c=document.getElementById(id);if(!c)return;
-  c.width=c.clientWidth*devicePixelRatio;c.height=c.clientHeight*devicePixelRatio;
-  const x=c.getContext('2d');x.scale(devicePixelRatio,devicePixelRatio);
-  const w=c.clientWidth,h=c.clientHeight;
-  x.clearRect(0,0,w,h);x.beginPath();x.moveTo(0,h/2);
-  for(let i=0;i<20;i++) x.lineTo(i*w/19,h/2+Math.sin(i/2+v*8)*h*0.35);
-  x.strokeStyle='#3b82f6';x.lineWidth=1.5;x.stroke();
-}
-
-// ── Add Repo ──────────────────────────────────────────────────────────
+// ── Add repo ───────────────────────────────────────────────────────────
 async function addRepo(){
-  const path=document.getElementById('repoPathInput').value.trim();
-  if(!path) return;
-  document.getElementById('mAdd').classList.remove('open');
+  const path=$('repoPathInput').value.trim();
+  if(!path){ toast('Enter a local folder path first.', true); return; }
+  $('mAdd').classList.remove('open');
   try{
     const d=await api('POST','/api/repos/add',{path});
+    toast(`Indexed ${d.name}: ${fmt(d.files)} files, ${fmt(d.nodes)} nodes.`);
+    curRepo=null;
     await loadOverview();
     await selectRepo(repos.find(r=>r.path===d.path)||repos[repos.length-1]);
-    document.getElementById('repoPathInput').value='';
-  }catch(e){alert('Failed: '+e.message)}
+    $('repoPathInput').value='';
+  }catch(e){ toast('Failed to index: '+e.message, true); }
 }
+$('repoPathInput').addEventListener('keydown',e=>{ if(e.key==='Enter') addRepo(); });
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='n'){ e.preventDefault(); mAdd.classList.add('open'); }
+  if(e.key==='Escape') mAdd.classList.remove('open');
+});
 
-// ── Live Runtime Stream ──────────────────────────────────────────────
+// ── Live stream ────────────────────────────────────────────────────────
 function setupRuntimeStream(){
-  const evtSource=new EventSource('/api/stream');
-  evtSource.onmessage=e=>{
+  const es=new EventSource('/api/stream');
+  es.onmessage=e=>{
     try{
       const evt=JSON.parse(e.data);
       prependEvent(evt);
-      updateRuntimeMonitor(evt);
-    }catch(err){console.error('stream',err)}
+      updateMonitor(evt);
+    }catch(err){}
   };
-  evtSource.onerror=()=>console.warn('runtime stream disconnected');
+  es.onerror=()=>{};
 }
-
 function prependEvent(evt){
-  const el=document.getElementById('eventsBody');
-  if(!el) return;
+  const el=$('eventsBody');
+  let list=el.querySelector('.events-list');
+  if(!list){ el.innerHTML='<div class="events-list"></div>'; list=el.querySelector('.events-list'); }
   const div=document.createElement('div');
   div.className='event-item';
-  div.innerHTML=`<span class="event-time">${new Date().toLocaleTimeString()}</span><span class="event-type">${evt.type||'event'}</span><span class="event-desc">${JSON.stringify(evt.detail||{}).slice(0,120)}</span>`;
-  el.prepend(div);
-  while(el.children.length>20) el.removeChild(el.lastChild);
+  div.innerHTML=`<span class="event-time">${new Date().toLocaleTimeString()}</span><span class="event-type">${esc(evt.type||'event')}</span><span class="event-desc">${esc(JSON.stringify(evt.detail||{})).slice(0,90)}</span>`;
+  list.prepend(div);
+  while(list.children.length>14) list.removeChild(list.lastChild);
 }
-
-function updateRuntimeMonitor(evt){
-  const status=document.getElementById('monitorStatus');
-  const pct=document.getElementById('monitorPct');
-  const bar=document.getElementById('monitorBar');
-  const steps=document.getElementById('stepsBody');
-  if(!status||!pct||!bar||!steps) return;
-
-  if(evt.type?.includes('started')){
-    status.textContent='Running';
-    status.style.color='var(--amber)';
+let monitorSteps=0;
+function updateMonitor(evt){
+  const st=$('monitorStatus'), pct=$('monitorPct'), bar=$('monitorBar'), steps=$('stepsBody');
+  const t=evt.type||'';
+  if(t.includes('started')){ st.textContent='Running'; st.style.color='var(--amber)'; monitorSteps=0; }
+  if(t.includes('completed')||t.includes('updated')){
+    st.textContent='Complete'; st.style.color='var(--green)';
   }
-
-  if(evt.type?.includes('completed')||evt.type?.includes('indexed')){
-    status.textContent='Completed';
-    status.style.color='var(--green)';
-  }
-
-  const rows=steps.querySelectorAll('tr').length;
-  const progress=Math.min(100,(rows+1)*12);
-  pct.textContent=progress+'%';
-  bar.style.width=progress+'%';
-
+  monitorSteps++;
+  const prog=Math.min(100,monitorSteps*14);
+  pct.textContent=prog+'%'; bar.style.width=prog+'%';
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td>${rows+1}</td><td><span class="step-dot ${evt.type?.includes('completed')?'done':'run'}"></span>${evt.type||'event'}</td><td>${evt.source||'runtime'}</td>`;
+  tr.innerHTML=`<td><span class="step-dot ${t.includes('started')?'run':'done'}"></span>${esc(t)}</td><td>${esc(evt.source||'runtime')}</td>`;
   steps.prepend(tr);
-  while(steps.children.length>12) steps.removeChild(steps.lastChild);
+  while(steps.children.length>8) steps.removeChild(steps.lastChild);
 }
 
+// ── Boot ───────────────────────────────────────────────────────────────
+setupCanvas();
 setupRuntimeStream();
-
-// ── Utils ─────────────────────────────────────────────────────────────
-const fmt=n=>n&&!isNaN(n)?n.toLocaleString():'0';
-const ago=s=>{if(!s)return'—';const d=Math.round((Date.now()-new Date(s))/1000);return d<60?d+'s':d<3600?Math.round(d/60)+'m':d<86400?Math.round(d/3600)+'h':Math.round(d/86400)+'d'};
+loadOverview();
+setInterval(loadOverview, 6000);
+setInterval(loadEvents, 5000);
+$('ctxQuery').addEventListener('input',()=>{ clearTimeout(ctxTimer); ctxTimer=setTimeout(loadContext,350); });
 </script>
 </body>
 </html>

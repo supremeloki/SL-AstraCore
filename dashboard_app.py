@@ -334,7 +334,7 @@ def patch_diff(path: str, file_path: str = ""):
     try:
         with open(fp, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
-        lines = [{"num": i+1, "text": l, "type": "context"} for i, l in enumerate(content.splitlines())]
+        lines = [{"num": i+1, "text": line, "type": "context"} for i, line in enumerate(content.splitlines())]
         return {"file": fp, "lines": lines[:200], "total": len(lines)}
     except OSError as e:
         return {"file": fp, "lines": [], "error": str(e)}
@@ -381,7 +381,8 @@ async def patch_apply(payload: dict = None):
 @app.post("/api/patch/analyze")
 async def patch_analyze(payload: dict = None):
     """Analyze patch impact: AST diff, dependency impact, risk score, confidence."""
-    import os, ast
+    import os
+    import ast
     payload = payload or {}
     path = payload.get("path", "")
     file_path = payload.get("file_path", "")
