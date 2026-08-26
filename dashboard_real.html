@@ -605,9 +605,12 @@ function renderMetrics(d){
 
 function renderRepoSelect(){
   const s = $('repoSelect');
-  s.innerHTML = repos.length
+  const desired = repos.length
     ? repos.map(r=>`<option value="${esc(r.path)}">${esc(r.name)} · ${fmt(r.nodes)}n/${fmt(r.edges)}e</option>`).join('')
     : '<option value="">No repositories yet</option>';
+  // Rebuild only when the repo set actually changed; keeps dropdown open/focus intact.
+  if (s.innerHTML === desired) { if(curRepo) s.value = curRepo.path; return; }
+  s.innerHTML = desired;
   s.onchange = e => { const r = repos.find(x=>x.path===e.target.value); if(r) selectRepo(r); };
   if(curRepo) s.value = curRepo.path;
 }
@@ -1029,8 +1032,8 @@ function updateMonitor(evt){
 setupCanvas();
 setupRuntimeStream();
 loadOverview();
-setInterval(loadOverview, 6000);
-setInterval(loadEvents, 5000);
+// SSE pushes events live; poll /api/status less often as a fallback only.
+setInterval(loadOverview, 15000);
 $('ctxQuery').addEventListener('input',()=>{ clearTimeout(ctxTimer); ctxTimer=setTimeout(loadContext,350); });
 </script>
 </body>

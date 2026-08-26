@@ -55,12 +55,13 @@ def _confine_to_registered_repo(candidate: str) -> str:
     """Resolve candidate path and refuse anything outside registered repos.
 
     All file-read/write endpoints must go through this. Prevents arbitrary
-    filesystem read/write from the dashboard.
+    filesystem read/write from the dashboard. Uses resolve() so symlinks
+    pointing outside a registered repo are rejected, not just `..` paths.
     """
-    resolved = str(Path(os.path.abspath(candidate)))
+    resolved = str(Path(candidate).resolve())
     for root in _registered_roots():
         try:
-            Path(resolved).relative_to(root)
+            Path(resolved).relative_to(str(Path(root).resolve()))
             return resolved
         except ValueError:
             continue
@@ -82,7 +83,9 @@ def _get_or_create(path: str):
         rec = _orchestrator.register_repo(root, backend="duckdb")
         _metrics.increment("repos.added", tags={"name": rec.name})
         _emit("repo_registered", {"name": rec.name})
-    if rec.status.value not in ("active", "indexing"):
+    # Re-index only fresh registrations; a failed repo must not trigger a
+    # synchronous full re-index on every request (death spiral).
+    if rec.status.value == "registered":
         rec = _orchestrator.index_repo(root)
     return rec
 
@@ -148,6 +151,8 @@ async def add_repo(payload: dict):
 
     _emit("scan_started", {"repo": rec.name, "path": rec.root_path})
     rec = _orchestrator.index_repo(rec.root_path)
+    if rec.status.value == "failed":
+        raise HTTPException(status_code=500, detail=f"indexing failed: {rec.error}")
     _emit("graph_updated", {"repo": rec.name, "nodes": rec.node_count, "edges": rec.edge_count})
     return {
         "name": rec.name,
@@ -586,3 +591,8 @@ def dashboard():
     from fastapi.responses import HTMLResponse as _HR
     html = (Path(__file__).parent / "dashboard_real.html").read_text(encoding="utf-8")
     return _HR(content=html, headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"})
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8780")))

@@ -38,6 +38,13 @@ vault:
   parse_wikilinks: true
   parse_tags: true
 
+agent:
+  # Task execution providers. generic = echo fallback; codex = real Codex CLI
+  # (skipped when the binary is missing); manual = render a task brief for
+  # human/VS Code execution.
+  providers:
+    - generic
+
 storage:
   engine: duckdb
   cache_engine: sqlite

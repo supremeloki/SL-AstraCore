@@ -125,7 +125,7 @@ class AgentAdapterLayer:
     def adapt_response(self, response: AgentResponse) -> AgentResponse:
         if response.execution_status is None:
             response.execution_status = (
-                response.content and "completed" or "failed"
+                ExecutionStatus.COMPLETED if response.content else ExecutionStatus.FAILED
             )
         return response
 

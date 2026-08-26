@@ -21,7 +21,9 @@ def _pattern_id(match: PatternMatch) -> str:
 
 
 def _conflict_id(match: ConflictMatch) -> str:
-    return f"conflict:{match.category}:{hash((match.source_a, match.source_b)) & 0xFFFFFFFF:x}"
+    import hashlib
+    digest = hashlib.sha256(f"{match.source_a}|{match.source_b}".encode("utf-8")).hexdigest()[:12]
+    return f"conflict:{match.category}:{digest}"
 
 
 def build_pattern_nodes(patterns: Sequence[PatternMatch]) -> list[IRPatternNode]:
@@ -89,14 +91,14 @@ def build_enrichment_edges(
     for c in conflict_nodes:
         for endpoint in (c.source_a, c.source_b):
             target = file_node_id(endpoint)
-            if target and target != f"file:{endpoint if endpoint == c.source_a else c.source_a}":
+            if target:
                 edges.append(IREdge(
                     from_node=c.id,
                     to_node=target,
                     type=EdgeType.DEPENDS_ON,
                     weight=c.confidence,
                     confidence=c.confidence,
-                    metadata={"role": "conflict_endpoint"},
+                    metadata={"role": "conflict_endpoint", "side": "a" if endpoint == c.source_a else "b"},
                 ))
 
     # dedupe on (from, to, type)

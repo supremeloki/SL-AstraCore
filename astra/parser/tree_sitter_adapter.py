@@ -60,8 +60,13 @@ def _get_parser(language: str):
 
 
 def _find_name(node, source: str) -> str:
+    # Java/C# method_declaration puts the return type (type_identifier) before
+    # the name; prefer a direct identifier/name child, fall back to recursion.
     for child in node.named_children:
-        if child.type in _NAME_NODE_TYPES:
+        if child.type in ("identifier", "name", "property_identifier"):
+            return source[child.start_byte:child.end_byte]
+    for child in node.named_children:
+        if child.type in ("type_identifier", "constant",):
             return source[child.start_byte:child.end_byte]
     for child in node.named_children:
         name = _find_name(child, source)
@@ -136,12 +141,22 @@ class TreeSitterAdapter:
                     ))
                 elif self.language == "ruby" and node.type == "call":
                     callee = node.named_children[0] if node.named_children else None
-                    if callee is not None and content[callee.start_byte:callee.end_byte] == "require":
-                        deps_node = node.child_by_field_name("arguments")
-                        if deps_node is not None:
+                    callee_name = content[callee.start_byte:callee.end_byte] if callee is not None else ""
+                    if callee_name in ("require", "require_relative"):
+                        args = node.child_by_field_name("arguments")
+                        # argument_list spans e.g. ("json"); take the inner string token.
+                        target = ""
+                        if args is not None:
+                            for tok in args.named_children:
+                                if tok.type == "string":
+                                    inner = [c for c in tok.named_children if c.type == "string_content"]
+                                    if inner:
+                                        target = content[inner[0].start_byte:inner[0].end_byte]
+                                    break
+                        if target:
                             dependencies.append(IRDependency(
                                 source_file=file_path,
-                                target_module=_strip_quotes(content[deps_node.start_byte:deps_node.end_byte]),
+                                target_module=target,
                                 kind="import",
                                 line=node.start_point[0] + 1,
                             ))
