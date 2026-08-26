@@ -1,0 +1,13 @@
+services:
+  astracore:
+    build: .
+    ports:
+      - "8780:8780"
+    volumes:
+      - astra-data:/data
+      # Repositories to index — mount them and add via the UI, e.g. /repos/my-project
+      - ./sample-repos:/repos:ro
+    restart: unless-stopped
+
+volumes:
+  astra-data:

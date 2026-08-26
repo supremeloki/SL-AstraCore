@@ -42,8 +42,9 @@ class Profiler:
         stats = pstats.Stats(self._profiler, stream=stream).sort_stats("cumulative")
         stats.print_stats(20)
         # Approximate total calls from stats
-        total_calls = sum(stat[0] for stat in stats.stats.values())
-        total_time = sum(stat[2] for stat in stats.stats.values())
+        raw_stats = getattr(stats, "stats", {})
+        total_calls = sum(stat[0] for stat in raw_stats.values())
+        total_time = sum(stat[2] for stat in raw_stats.values())
         return ProfileResult(
             total_calls=total_calls,
             total_time=total_time,

@@ -1,6 +1,5 @@
 import os
 
-from astra.models.file_node import FileCategory
 from astra.models.repository import FileKind, FileMetadata
 
 

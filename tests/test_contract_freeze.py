@@ -7,11 +7,9 @@ Ensures every api.py protocol matches its concrete implementation:
 
 from __future__ import annotations
 
-from typing import get_type_hints
 
 from astra.storage.backend import StorageBackend
-from astra.graph.api import GraphStorageAdapter, KnowledgeGraph
-from astra.context.api import ContextEngine as ContextEngineProtocol
+from astra.graph.api import GraphStorageAdapter
 from astra.agents.adapter import AgentAdapter
 
 

@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Protocol, Sequence
 
-from astra.context.api import ContextEngine
 from astra.ir.models import IRContextPack, RiskLevel
 
 

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import contextvars
 import threading
-import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Iterator, Optional
 
 _cancel_ctx: contextvars.ContextVar[Optional["CancellationContext"]] = contextvars.ContextVar("_cancel_ctx", default=None)
 
@@ -52,7 +51,7 @@ def get_current_context() -> Optional[CancellationContext]:
 
 
 @contextmanager
-def cancellation_scope(reason: str = "") -> CancellationContext:
+def cancellation_scope(reason: str = "") -> Iterator[CancellationContext]:
     """Create a new cancellation scope."""
     parent = get_current_context()
     ctx = CancellationContext(parent=parent)
@@ -75,7 +74,7 @@ def cancel_all(reason: str = "") -> None:
 
 
 @contextmanager
-def timeout_scope(seconds: float, reason: str = "Timeout") -> CancellationContext:
+def timeout_scope(seconds: float, reason: str = "Timeout") -> Iterator[CancellationContext]:
     """Context manager that cancels after timeout."""
     ctx = CancellationContext()
     timer = threading.Timer(seconds, ctx.cancel, args=[reason])

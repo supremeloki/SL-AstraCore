@@ -8,12 +8,10 @@ No network required. Uses in-memory fixtures.
 """
 from __future__ import annotations
 
-from pathlib import Path
 
 from astra.context.engine import ContextEngine
 from astra.graph.in_memory_storage import InMemoryGraphStorage
 from astra.graph.mutator import GraphMutator
-from astra.ir.models import IRNode, NodeType, FileRole, IRFileNode
 from astra.parser.python_adapter import PythonParserAdapter
 from astra.parser.registry import ParserRegistry
 from astra.resolver.import_resolver import resolve_imports_into_edges
@@ -165,7 +163,7 @@ def test_e2e_full_pipeline():
     assert after_edges < before_edges, "Edge cascade deletion failed"
     assert storage.get_node("file:src/services.py") is None
 
-    print(f"\n=== E2E Summary ===")
+    print("\n=== E2E Summary ===")
     print(f"Files parsed:  {len(parse_results)}")
     print(f"Symbols found: {total_symbols}")
     print(f"Dependencies:  {total_deps}")
@@ -175,4 +173,4 @@ def test_e2e_full_pipeline():
     print(f"Context nodes: {len(pack.nodes)}")
     print(f"Context edges: {len(pack.edges)}")
     print(f"After deletion: {after_edges} edges remaining")
-    print(f"=== Phase 1 E2E PASSED ===")
+    print("=== Phase 1 E2E PASSED ===")

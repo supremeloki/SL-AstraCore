@@ -1,10 +1,10 @@
 import os
-from astra.core.constants import CONFIG_PATH, ROOT_DIR
+from astra.core.constants import ROOT_DIR
 
 try:
     import yaml
 except ImportError:
-    yaml = None
+    yaml = None  # type: ignore[assignment]
 
 _DEFAULTS = {
     "project": {"name": "SL-AstraCore", "version": "1.0.0"},

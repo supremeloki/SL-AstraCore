@@ -1,6 +1,5 @@
 """Dashboard API tests: validation, metrics wiring, timestamps, replay round-trip."""
 
-import json
 import os
 import tempfile
 from datetime import datetime

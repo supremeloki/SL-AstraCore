@@ -56,6 +56,8 @@ class AstraCore:
             "phase4_context": context_output,
             "phase5_runtime_orchestrator": runtime,
             "phase5_execution_plan": None,
+            "phase5_runtime_analysis": runtime_analysis,
+            "run_result": run_result,
             "phase6_dashboard": dashboard,
         }
 

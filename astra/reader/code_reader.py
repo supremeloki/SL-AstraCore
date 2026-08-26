@@ -1,5 +1,4 @@
 from astra.core.logger import get_logger
-from astra.models.file_node import FileNode
 
 logger = get_logger("astra.reader.code_reader")
 

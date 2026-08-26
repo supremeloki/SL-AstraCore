@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence, Optional
+from typing import Sequence
 from astra.ir.models import IRNode, IREdge
 
 
@@ -101,14 +101,14 @@ class GraphMutator:
         total = GraphMutationResult()
 
         with self._storage.transaction():
-            for node in nodes_to_delete:
-                total = self._merge(total, self.apply_node_delete(node))
+            for node_id in nodes_to_delete:
+                total = self._merge(total, self.apply_node_delete(node_id))
 
             if nodes_to_upsert and hasattr(self._storage, "add_nodes"):
                 existing_ids = self._storage.get_node_ids()
                 self._storage.add_nodes(nodes_to_upsert)
-                for node in nodes_to_upsert:
-                    if node.id in existing_ids:
+                for upserted in nodes_to_upsert:
+                    if upserted.id in existing_ids:
                         total = self._merge(total, GraphMutationResult(updated_nodes=1))
                     else:
                         total = self._merge(total, GraphMutationResult(added_nodes=1))
@@ -116,14 +116,14 @@ class GraphMutator:
                 for node in nodes_to_upsert:
                     total = self._merge(total, self.apply_node_upsert(node))
 
-            for edge in edges_to_delete:
-                total = self._merge(total, self.apply_edge_delete(*edge))
+            for edge_key in edges_to_delete:
+                total = self._merge(total, self.apply_edge_delete(*edge_key))
 
             if edges_to_upsert and hasattr(self._storage, "add_edges"):
                 existing_edges = self._storage.get_edge_keys()
                 self._storage.add_edges(edges_to_upsert)
-                for edge in edges_to_upsert:
-                    key = (edge.from_node, edge.to_node, edge.type.name)
+                for upserted_edge in edges_to_upsert:
+                    key = (upserted_edge.from_node, upserted_edge.to_node, upserted_edge.type.name)
                     if key in existing_edges:
                         total = self._merge(total, GraphMutationResult(updated_edges=1))
                     else:

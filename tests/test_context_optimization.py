@@ -87,6 +87,7 @@ def test_context_engine_runs():
     """ContextEngine can be constructed and _estimate_tokens works."""
     kg = MockKnowledgeGraph()
     engine = ContextEngine(knowledge_graph=kg)
+    assert engine is not None
     # TokenBudget estimation works with real data
     budget = TokenBudget(max_budget=1000)
     budget.reserve("node1", "file main.py FILE")

@@ -40,8 +40,11 @@ class RuntimeOrchestrator:
     ) -> None:
         self._parser_registry = parser_registry or build_default_parser_registry()
         self._repos: dict[str, RepoRecord] = {}
+        astra_home = os.environ.get("ASTRA_HOME") or os.path.join(
+            os.path.expanduser("~"), ".astra"
+        )
         self._metadata_db_path = metadata_db_path or os.path.join(
-            os.path.expanduser("~"), ".astra", "runtime.db"
+            astra_home, "runtime.db"
         )
 
         # Ensure runtime metadata directory exists
@@ -247,7 +250,6 @@ class RuntimeOrchestrator:
         query_intent: str,
         max_tokens: int | None,
     ) -> IRContextPack:
-        from astra.models.graph_node import NodeType as LegacyNodeType
         from astra.models.graph_node import node_type_from_ir
         from astra.models.knowledge_graph import KnowledgeGraph
         from astra.context.context_engine import ContextEngine as TaskContextEngine
@@ -277,10 +279,14 @@ class RuntimeOrchestrator:
             engine._token_budget.set_budget(max_tokens)
         _analysis, _pack, _deps, _risks = engine.build_pack(query_intent)
 
+        def _ir_node_type(node_id: str) -> NodeType:
+            legacy = node_type_from_ir(kg.node_index[node_id].node_type)
+            return NodeType[legacy.name]
+
         nodes_ref = tuple(
             ContextNodeRef(
                 node_id=n["id"],
-                node_type=LegacyNodeType[node_type_from_ir(kg.node_index[n["id"]].node_type).name] if n["id"] in kg.node_index else NodeType.FILE,
+                node_type=_ir_node_type(n["id"]) if n["id"] in kg.node_index else NodeType.FILE,
                 name=n.get("label", ""),
                 file_path=(n.get("file_path") or n["id"].removeprefix("file:")) if n["id"].startswith("file:") else n.get("file_path", ""),
                 relevance_score=float(n.get("relevance", 1.0)),

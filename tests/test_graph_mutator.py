@@ -1,4 +1,4 @@
-from astra.graph.mutator import GraphMutator, compute_diff, compute_edge_diff, GraphMutationResult
+from astra.graph.mutator import GraphMutator, compute_diff, compute_edge_diff
 from astra.graph.in_memory_storage import InMemoryGraphStorage
 from astra.ir.models import IRNode, IREdge, NodeType, EdgeType
 

@@ -11,14 +11,13 @@ Verifies:
 
 from __future__ import annotations
 
-import time
 import pytest
 
 from astra.runtime.metrics import MetricsCollector
 from astra.runtime.event_bus import EventBus, RuntimeEvent
 from astra.runtime.tracing import Tracer
 from astra.runtime.health import HealthDiagnostics, HealthStatus, ComponentHealth
-from astra.runtime.profiling import Profiler, get_profiler
+from astra.runtime.profiling import Profiler
 from astra.runtime.telemetry import TelemetryEngine
 
 
@@ -79,7 +78,8 @@ class TestEventBus:
 
     def test_unsubscribe(self):
         bus = EventBus()
-        handler = lambda e: None
+        def handler(e):
+            return None
         bus.subscribe("test", handler)
         bus.unsubscribe("test", handler)
         bus.emit(RuntimeEvent(event_type="test", payload="x"))

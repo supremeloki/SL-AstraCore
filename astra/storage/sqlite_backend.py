@@ -211,7 +211,7 @@ class SQLiteBackend:
              for e in edges],
         )
 
-    def transaction(self) -> "_SQLiteTransaction":
+    def transaction(self):
         return _SQLiteTransaction(self)
 
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Callable
+
 from astra.runtime.sandbox import ExecutionSandbox
 from astra.runtime.quota_enforcer import ResourceQuotaEnforcer
-from astra.runtime.cancellation import CancellationContext
 from astra.runtime.timeout_enforcer import TimeoutEnforcer
 from astra.runtime.circuit_breaker import CircuitBreaker
 
@@ -16,7 +17,7 @@ class SafetyEngine:
         self.timeout = TimeoutEnforcer()
         self.circuit_breaker = CircuitBreaker()
 
-    def run_safe(self, task_id: str, action: callable, *args, **kwargs):
+    def run_safe(self, task_id: str, action: Callable, *args, **kwargs):
         """Execute a task within the full safety stack."""
         with self.sandbox.isolate():
             with self.quota.enforce():

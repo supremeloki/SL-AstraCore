@@ -82,7 +82,6 @@ class ObsidianReader:
         concepts = []
         headings = re.findall(r"^##\s+(.+)$", content, re.MULTILINE)
         concept_keywords = ["concept", "idea", "principle", "pattern", "model", "theory"]
-        lower = content.lower()
         for heading in headings:
             if any(kw in heading.lower() for kw in concept_keywords):
                 concepts.append(heading.strip())

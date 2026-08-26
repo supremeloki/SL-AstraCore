@@ -12,11 +12,10 @@ from __future__ import annotations
 import os
 import json
 import tempfile
-import pytest
 
 from astra.runtime.durable_graph import DurableExecutionGraph, PersistedGraph
 from astra.runtime.replay_engine import ReplayEngine, ReplayEvent
-from astra.runtime.compaction import SnapshotCompactor, CompactionResult
+from astra.runtime.compaction import SnapshotCompactor
 from astra.runtime.persistence_engine import PersistenceEngine
 
 
@@ -237,6 +236,7 @@ class TestSnapshotCompactor:
 
             comp = SnapshotCompactor(tmp, journal)
             result = comp.compact_journal(keep_last_n=10)
+            assert result is not None
             with open(journal) as f:
                 lines = f.readlines()
             assert len(lines) == 3  # Not trimmed

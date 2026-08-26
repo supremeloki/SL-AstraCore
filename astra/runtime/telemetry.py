@@ -6,15 +6,14 @@ Export formats: structured JSON, Prometheus-compatible text.
 
 from __future__ import annotations
 
-import json
 import time
 from typing import Any
 
 from astra.runtime.metrics import MetricsCollector
 from astra.runtime.event_bus import EventBus, RuntimeEvent
 from astra.runtime.tracing import Tracer
-from astra.runtime.health import HealthDiagnostics, HealthStatus
-from astra.runtime.profiling import Profiler, get_profiler
+from astra.runtime.health import HealthDiagnostics
+from astra.runtime.profiling import get_profiler
 
 
 class TelemetryEngine:
@@ -47,12 +46,12 @@ class TelemetryEngine:
     def export_prometheus(self) -> str:
         """Export metrics in Prometheus exposition format."""
         lines: list[str] = []
-        for name, value in self.metrics._counters.items():
-            lines.append(f'astra_counter_{name} {value}')
-        for name, value in self.metrics._gauges.items():
-            lines.append(f'astra_gauge_{name} {value}')
-        for name, errors in self.metrics._errors.items():
-            lines.append(f'astra_error_{name} {errors}')
+        for counter_name, counter_value in self.metrics._counters.items():
+            lines.append(f'astra_counter_{counter_name} {counter_value}')
+        for gauge_name, gauge_value in self.metrics._gauges.items():
+            lines.append(f'astra_gauge_{gauge_name} {gauge_value}')
+        for error_name, error_count in self.metrics._errors.items():
+            lines.append(f'astra_error_{error_name} {error_count}')
         return "\n".join(lines)
 
     def emit_event(self, event_type: str, payload: Any, source: str = "") -> None:

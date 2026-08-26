@@ -1,7 +1,6 @@
 from astra.context.context_engine import ContextEngine
 from astra.context.graph_query import GraphQuery
 from astra.core.logger import get_logger
-from astra.models.graph_node import NodeType
 from astra.models.runtime import (
     BrainAnswer,
     DashboardView,

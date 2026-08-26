@@ -8,7 +8,6 @@ Verifies:
 
 from astra.graph.name_normalizer import NameNormalizer
 from astra.graph.relation_builder import (
-    build_dependency_edges,
     deduplicate_edges,
     map_dependency_to_edge,
 )

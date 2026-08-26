@@ -4,7 +4,7 @@ import os
 try:
     import resource
 except ImportError:  # Windows
-    resource = None
+    resource = None  # type: ignore[assignment]
 import psutil
 import threading
 import time
@@ -107,17 +107,27 @@ class ResourceQuotaEnforcer:
     def apply_os_limits(self) -> None:
         """Apply OS-level resource limits (Unix only)."""
         try:
-            if resource is None:
+            import resource as _resource_mod
+        except ImportError:  # Windows: no resource module
+            return
+
+        # ponytail: resource is untyped/Unix-only; route through Any so the
+        # hasattr guards type-check. Swap to a typed stub if Windows support matters.
+        from typing import Any as _Any
+        res: _Any = _resource_mod
+
+        try:
+            if res is None:
                 return
-            if hasattr(resource, "RLIMIT_AS"):
+            if hasattr(res, "RLIMIT_AS"):
                 limit = self.config.max_memory_mb * 1024 * 1024
-                resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+                res.setrlimit(res.RLIMIT_AS, (limit, limit))
             # CPU time limit
-            if hasattr(resource, "RLIMIT_CPU"):
+            if hasattr(res, "RLIMIT_CPU"):
                 cpu_sec = int(self.config.max_execution_seconds)
-                resource.setrlimit(resource.RLIMIT_CPU, (cpu_sec, cpu_sec))
+                res.setrlimit(res.RLIMIT_CPU, (cpu_sec, cpu_sec))
             # File descriptors
-            if hasattr(resource, "RLIMIT_NOFILE"):
-                resource.setrlimit(resource.RLIMIT_NOFILE, (self.config.max_file_descriptors, self.config.max_file_descriptors))
-        except (ValueError, resource.error):
+            if hasattr(res, "RLIMIT_NOFILE"):
+                res.setrlimit(res.RLIMIT_NOFILE, (self.config.max_file_descriptors, self.config.max_file_descriptors))
+        except (ValueError, OSError):
             pass  # Limits may not be adjustable

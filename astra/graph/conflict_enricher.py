@@ -23,6 +23,10 @@ def detect_naming_conflicts(files: Sequence[IRFileNode]) -> Sequence[ConflictMat
     for node in files:
         stem = node.file_path.replace("\\", "/").split("/")[-1]
         base = stem.split(".")[0]
+        # ponytail: __init__/setup-style magic names collide by design in every
+        # package — flagging them is pure noise; revisit if a real signal emerges.
+        if base.lower() in ("__init__", "setup", "conftest", "index"):
+            continue
         name_map[base.lower()].append(node)
 
     conflicts = []

@@ -3,6 +3,7 @@
 from pathlib import Path
 import asyncio
 import os
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -38,7 +39,8 @@ _EXPLORER_MAX_DEPTH = 12
 _EXPLORER_MAX_ENTRIES = 5000
 
 # Journal for execution mutations (patch applies); replayable via /api/executions/replay.
-_journal = ExecutionJournal(os.path.join(os.path.expanduser("~"), ".astra", "dashboard_journal.jsonl"))
+_astra_home = os.environ.get("ASTRA_HOME") or os.path.join(os.path.expanduser("~"), ".astra")
+_journal = ExecutionJournal(os.path.join(_astra_home, "dashboard_journal.jsonl"))
 
 
 def _emit(event_type: str, payload: dict, source: str = "dashboard") -> None:
@@ -278,8 +280,10 @@ def explore_repo(path: str):
     """Filesystem-backed tree for a repo."""
     import os
     root = str(Path(path).resolve())
+    budget = [_EXPLORER_MAX_ENTRIES]
+
     def _build(p, depth):
-        if _build.budget[0] <= 0:
+        if budget[0] <= 0:
             return {"name": os.path.basename(p), "path": p, "children": None}
         if not os.path.isdir(p) or depth > _EXPLORER_MAX_DEPTH:
             return {"name": os.path.basename(p), "path": p, "children": None}
@@ -291,21 +295,20 @@ def explore_repo(path: str):
         for e in entries:
             if e.startswith(".") or e.startswith("__pycache__") or e == "node_modules":
                 continue
-            if _build.budget[0] <= 0:
+            if budget[0] <= 0:
                 break
-            _build.budget[0] -= 1
+            budget[0] -= 1
             fp = os.path.join(p, e)
             if os.path.islink(fp):
                 continue
             children.append(_build(fp, depth + 1))
         return {"name": os.path.basename(p), "path": p, "children": children}
-    _build.budget = [_EXPLORER_MAX_ENTRIES]
     root = _confine_to_registered_repo(root)
     return {"tree": _build(root, 0)}
 
 
 @app.post("/api/repos/remove")
-async def remove_repo(payload: dict = None, path: str = ""):
+async def remove_repo(payload: Optional[dict] = None, path: str = ""):
     p = (payload or {}).get("path", "") if isinstance(payload, dict) else ""
     if not p:
         p = path
@@ -341,7 +344,7 @@ def patch_diff(path: str, file_path: str = ""):
 
 
 @app.post("/api/patch/apply")
-async def patch_apply(payload: dict = None):
+async def patch_apply(payload: Optional[dict] = None):
     """Simple find-and-replace patch (write confined to registered repos)."""
     import os
     payload = payload or {}
@@ -379,7 +382,7 @@ async def patch_apply(payload: dict = None):
 
 
 @app.post("/api/patch/analyze")
-async def patch_analyze(payload: dict = None):
+async def patch_analyze(payload: Optional[dict] = None):
     """Analyze patch impact: AST diff, dependency impact, risk score, confidence."""
     import os
     import ast
@@ -417,7 +420,7 @@ async def patch_analyze(payload: dict = None):
         # Load graph for dependency impact
         from astra.storage.backend import StorageProvider
         rec = _orchestrator.get_repo(root) if hasattr(_orchestrator, 'get_repo') else None
-        dep_impact = {"upstream": 0, "downstream": 0, "affected_files": []}
+        dep_impact: dict = {"upstream": 0, "downstream": 0, "affected_files": []}
         if rec:
             storage = StorageProvider(backend=rec.storage_backend, db_path=rec.db_path).create()
             storage.connect()
@@ -501,7 +504,7 @@ def journal_recent(limit: int = 50):
 
 
 @app.post("/api/executions/replay")
-async def replay_executions(payload: dict = None):
+async def replay_executions(payload: Optional[dict] = None):
     """Replay journaled execution events through ReplayEngine.
 
     Accepts {"journal_path": "..."} (confined to registered repos or the

@@ -1,6 +1,5 @@
 from astra.agents.adapter import AgentAdapterLayer
-from astra.agents.models import AgentRequest, AgentResponse, ExecutionStatus
-from astra.agents.providers import BaseAgentProvider, CodexProvider, GenericProvider
+from astra.agents.providers import CodexProvider, GenericProvider
 from astra.context.engine import ContextEngine
 from astra.graph.in_memory_storage import InMemoryGraphStorage
 from astra.graph.mutator import GraphMutator
@@ -35,7 +34,6 @@ def test_adapter_build_request():
 
 
 def test_provider_resolution():
-    ctx = _build_context()
     adapter = AgentAdapterLayer(providers=[CodexProvider(), GenericProvider()])
     provider = adapter.resolve_provider("refactor the code")
     assert provider.name == "codex"

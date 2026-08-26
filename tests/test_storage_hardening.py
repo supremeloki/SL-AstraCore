@@ -45,7 +45,7 @@ def _run_batch_and_transaction_tests(backend_name: str, db_path: str):
     assert storage.edge_count() == 2
 
     # Transaction commit
-    with storage.transaction() as tx:
+    with storage.transaction():
         storage.add_node(IRNode(id="n4", type=NodeType.FILE, name="extra", source="t"))
     assert storage.node_count() == 4
 

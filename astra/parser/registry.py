@@ -85,8 +85,9 @@ class _JSTSTreeSitterAdapter:
     @staticmethod
     def _has_parser(language: str) -> bool:
         try:
-            from tree_sitter_language_pack import get_parser
-            return get_parser(language) is not None
+            from typing import cast
+            from tree_sitter_language_pack import SupportedLanguage, get_parser
+            return get_parser(cast(SupportedLanguage, language)) is not None
         except Exception:
             return False
 
@@ -127,10 +128,6 @@ def build_default_parser_registry() -> ParserRegistry:
         from astra.parser.jsts_adapter import JSTSParserAdapter
         registry.register(JSTSParserAdapter())
     for language in _TREE_SITTER_LANGUAGES:
-        try:
-            from tree_sitter_language_pack import get_parser
-            if get_parser(language) is not None:
-                registry.register(TreeSitterAdapter(language))
-        except Exception:
-            pass
+        if _JSTSTreeSitterAdapter._has_parser(language):
+            registry.register(TreeSitterAdapter(language))
     return registry

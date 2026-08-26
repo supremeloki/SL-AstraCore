@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-from astra.ir.models import IRContextPack
 
 
 class RepoStatus(Enum):

@@ -4,8 +4,8 @@ import os
 import tempfile
 import shutil
 from contextlib import contextmanager
-from dataclasses import dataclass
 from typing import Optional
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -16,8 +16,8 @@ class SandboxConfig:
     allow_filesystem_write: bool = False
     max_files: int = 100
     max_file_size_mb: int = 10
-    allowed_paths: list[str] = None
-    blocked_paths: list[str] = None
+    allowed_paths: Optional[list[str]] = None
+    blocked_paths: Optional[list[str]] = None
 
     def __post_init__(self):
         if self.allowed_paths is None:
@@ -39,7 +39,7 @@ class ExecutionSandbox:
         path_obj = Path(path).resolve()
 
         # Check blocked paths first
-        for blocked in self.config.blocked_paths:
+        for blocked in (self.config.blocked_paths or []):
             if path_obj.is_relative_to(Path(blocked).resolve()):
                 return False
 

@@ -1,7 +1,6 @@
 from astra.graph.pattern_enricher import (
     detect_design_patterns,
     detect_naming_conventions,
-    PatternMatch,
 )
 from astra.ir.models import IRFileNode, NodeType
 

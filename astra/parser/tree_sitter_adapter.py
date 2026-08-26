@@ -52,8 +52,9 @@ _LANG_EXTENSIONS = {
 
 def _get_parser(language: str):
     try:
-        from tree_sitter_language_pack import get_parser
-        return get_parser(language)
+        from typing import cast
+        from tree_sitter_language_pack import get_parser, SupportedLanguage
+        return get_parser(cast(SupportedLanguage, language))
     except Exception:
         return None
 

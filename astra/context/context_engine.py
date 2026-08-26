@@ -1,7 +1,5 @@
 from astra.core.logger import get_logger
 from astra.core.lifecycle import Lifecycle
-from astra.models.context_pack import ContextPack
-from astra.models.dependency_snapshot import DependencySnapshot, RiskSummary
 from astra.context.task_analyzer import TaskAnalyzer
 from astra.context.graph_query import GraphQuery
 from astra.context.ranking import Ranking

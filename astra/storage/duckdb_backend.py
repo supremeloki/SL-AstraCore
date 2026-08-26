@@ -194,10 +194,12 @@ class DuckDBBackend:
         return {(r[0], r[1], r[2]) for r in rows}
 
     def node_count(self) -> int:
-        return self.conn.execute("SELECT COUNT(*) FROM graph_nodes").fetchone()[0]
+        row = self.conn.execute("SELECT COUNT(*) FROM graph_nodes").fetchone()
+        return int(row[0]) if row else 0
 
     def edge_count(self) -> int:
-        return self.conn.execute("SELECT COUNT(*) FROM graph_edges").fetchone()[0]
+        row = self.conn.execute("SELECT COUNT(*) FROM graph_edges").fetchone()
+        return int(row[0]) if row else 0
 
     # Batch operations (Phase 2 hardened)
     def add_nodes(self, nodes: Sequence[IRNode]) -> None:
@@ -256,7 +258,7 @@ class DuckDBBackend:
         ).fetchall()
         return [r[0] for r in rows]
 
-    def transaction(self) -> _TransactionCtx:
+    def transaction(self):
         return _DuckDBTransaction(self)
 
 

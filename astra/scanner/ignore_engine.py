@@ -1,6 +1,6 @@
 import os
 import fnmatch
-from astra.core.constants import ASTRAIGNORE_PATH, DEFAULT_IGNORE_DIRS, DEFAULT_IGNORE_EXTENSIONS
+from astra.core.constants import DEFAULT_IGNORE_DIRS, DEFAULT_IGNORE_EXTENSIONS
 from astra.core.logger import get_logger
 
 logger = get_logger("astra.scanner.ignore_engine")

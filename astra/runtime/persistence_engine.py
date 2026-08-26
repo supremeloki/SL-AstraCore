@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from astra.runtime.durable_graph import DurableExecutionGraph, PersistedGraph
-from astra.runtime.replay_engine import ReplayEngine, ReplayEvent
+from astra.runtime.replay_engine import ReplayEngine
 from astra.runtime.compaction import SnapshotCompactor, CompactionResult
 
 

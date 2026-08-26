@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import hashlib
-import os
 import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional, Set
+from typing import Any, Callable, Optional, Set
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
@@ -39,7 +37,7 @@ class IncrementalFileWatcher:
         self._file_extensions = file_extensions
         self._debounce_seconds = debounce_seconds
 
-        self._observer: Optional[Observer] = None
+        self._observer: Optional[Any] = None
         self._handler: Optional[_DebouncedHandler] = None
         self._running = False
         self._lock = threading.Lock()
@@ -52,7 +50,7 @@ class IncrementalFileWatcher:
 
             self._handler = _DebouncedHandler(
                 root_path=self._root_path,
-                file_extensions=self._file_extensions,
+                file_extensions=self._file_extensions if self._file_extensions is not None else set(),
                 debounce_seconds=self._debounce_seconds,
                 callback=self._process_changes,
             )
@@ -109,7 +107,8 @@ class _DebouncedHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        path = str(Path(event.src_path).resolve())
+        src = event.src_path or ""
+        path = str(Path(str(src)).resolve())
 
         # Skip if not in watched extensions
         if not any(path.endswith(ext) for ext in self._file_extensions):

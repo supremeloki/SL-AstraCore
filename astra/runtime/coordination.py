@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-from astra.runtime.scheduler import AdaptiveScheduler, Priority, ScheduledTask
+from astra.runtime.scheduler import AdaptiveScheduler, Priority
 from astra.runtime.resources import ResourceManager, ResourceQuota
-from astra.runtime.arbitration import TaskArbitrator, AgentRequest, ArbitrationResult
+from astra.runtime.arbitration import TaskArbitrator, AgentRequest, ArbitrationDecision, ArbitrationResult
 from astra.runtime.queue_balancer import QueueBalancer
 
 
@@ -45,7 +45,7 @@ class CoordinationEngine:
             )
         except RuntimeError as e:
             return None, ArbitrationResult(
-                decision="deny",
+                decision=ArbitrationDecision.DENY,
                 reason=str(e),
                 assigned_agent=None
             )
@@ -56,7 +56,7 @@ class CoordinationEngine:
         if not can_accept:
             self.scheduler.remove(task_id)
             return None, ArbitrationResult(
-                decision="deny",
+                decision=ArbitrationDecision.DENY,
                 reason=f"Resource check failed: {reason}",
                 assigned_agent=None
             )
@@ -79,7 +79,7 @@ class CoordinationEngine:
             self.scheduler.remove(task_id)
             self.arbitration.release_task(agent_id)
             return None, ArbitrationResult(
-                decision="deny",
+                decision=ArbitrationDecision.DENY,
                 reason="No workers available",
                 assigned_agent=None
             )

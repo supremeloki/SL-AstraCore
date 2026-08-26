@@ -1,4 +1,4 @@
-from astra.ir.models import IRProjectIndex, IRFileNode
+from astra.ir.models import IRFileNode
 from astra.models.project_index import ProjectIndex
 
 def to_legacy_project_index(ir_repo_index) -> ProjectIndex:

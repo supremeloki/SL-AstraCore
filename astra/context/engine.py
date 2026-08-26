@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence
 from astra.context.token_budget import TokenBudget
-from astra.ir.models import IRContextPack, IRNode, IREdge, NodeType, ContextNodeRef, ContextEdgeRef
+from astra.ir.models import IRContextPack, ContextNodeRef, ContextEdgeRef
 
 class ContextEngine:
     """Generates a compressed context pack based on graph queries."""

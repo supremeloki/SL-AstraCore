@@ -13,10 +13,10 @@ from __future__ import annotations
 import time
 import pytest
 
-from astra.runtime.scheduler import AdaptiveScheduler, Priority, ScheduledTask
+from astra.runtime.scheduler import AdaptiveScheduler, Priority
 from astra.runtime.resources import ResourceManager, ResourceQuota, get_total_memory_mb
 from astra.runtime.arbitration import TaskArbitrator, AgentRequest, ArbitrationDecision
-from astra.runtime.queue_balancer import QueueBalancer, WorkerStatus
+from astra.runtime.queue_balancer import QueueBalancer
 from astra.runtime.coordination import CoordinationEngine
 
 

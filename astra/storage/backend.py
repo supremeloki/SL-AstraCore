@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, Protocol, Sequence, Optional, Any
+from typing import Protocol, Sequence, Optional, Any
 from astra.ir.models import IRNode, IREdge, NodeType, EdgeType
 
 
@@ -45,9 +45,12 @@ class StorageBackend(Protocol):
 
 class _TransactionCtx:
     """Context manager for atomic storage transactions."""
-    def __enter__(self) -> "_TransactionCtx": ...
-    def __exit__(self, *args: Any) -> None: ...
-    def rollback(self) -> None: ...
+    def __enter__(self) -> "_TransactionCtx":
+        return self
+    def __exit__(self, *args: Any) -> None:
+        return None
+    def rollback(self) -> None:
+        return None
 
 
 class StorageProvider:
@@ -60,9 +63,11 @@ class StorageProvider:
     def create(self) -> StorageBackend:
         if self._backend_name == "duckdb":
             from astra.storage.duckdb_backend import DuckDBBackend
-            return DuckDBBackend(self._db_path)
+            backend_obj: StorageBackend = DuckDBBackend(self._db_path)
+            return backend_obj
         elif self._backend_name == "sqlite":
             from astra.storage.sqlite_backend import SQLiteBackend
-            return SQLiteBackend(self._db_path)
+            backend_obj = SQLiteBackend(self._db_path)
+            return backend_obj
         else:
             raise ValueError(f"Unknown backend: {self._backend_name}")

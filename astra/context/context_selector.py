@@ -2,7 +2,6 @@ from astra.core.logger import get_logger
 from astra.models.context_pack import ContextPack
 from astra.models.dependency_snapshot import DependencySnapshot, RiskSummary
 from astra.models.graph_node import NodeType
-from astra.models.task_analysis import TaskAnalysis
 
 logger = get_logger("astra.context.context_selector")
 
@@ -126,9 +125,6 @@ class ContextSelector:
         downstream = []
         cycles = []
 
-        adj = {e.from_node: e.to_node for e in self._gq._kg.edges}
-        rev_adj = {e.to_node: e.from_node for e in self._gq._kg.edges}
-
         for nid in node_ids:
             up = self._gq.upstream(nid, 1)
             for target, etype, depth in up:
@@ -175,7 +171,6 @@ class ContextSelector:
 
     def _detect_hidden_risks(self, node_ids, conflicts):
         risks = []
-        node = None
         for nid in node_ids:
             n = self._gq.get_node(nid)
             if n and n.is_orphan:

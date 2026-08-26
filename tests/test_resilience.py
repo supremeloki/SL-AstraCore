@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 import time
@@ -11,7 +10,7 @@ from astra.runtime.retry import RetryOrchestrator
 from astra.runtime.journal import ExecutionJournal
 from astra.runtime.checkpoint import CheckpointManager
 from astra.runtime.recovery import CrashRecovery
-from astra.runtime.dead_letter import DeadLetterQueue, DeadLetterItem
+from astra.runtime.dead_letter import DeadLetterQueue
 from astra.runtime.circuit_breaker import CircuitBreaker
 
 

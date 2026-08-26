@@ -1,5 +1,4 @@
 from astra.graph.conflict_enricher import (
-    ConflictMatch,
     _different_modules,
     detect_circular_dependencies,
     detect_naming_conflicts,

@@ -1,5 +1,4 @@
 import hashlib
-import os
 from astra.core.logger import get_logger
 
 logger = get_logger("astra.scanner.hash_engine")

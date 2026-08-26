@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import inspect
+import asyncio
 import time
 import random
 import logging
-from typing import Callable, TypeVar, ParamSpec, Any, Optional
+from typing import Callable, TypeVar, ParamSpec, Optional
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -50,13 +52,17 @@ class RetryOrchestrator:
                     attempt + 1, self.max_attempts, exc, delay
                 )
                 time.sleep(delay)
+        assert last_exc is not None
         raise last_exc
 
     async def execute_async(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
         last_exc: Optional[BaseException] = None
         for attempt in range(self.max_attempts):
             try:
-                return await func(*args, **kwargs)
+                result = func(*args, **kwargs)
+                if inspect.isawaitable(result):
+                    return await result
+                return result  # pragma: no cover - sync callable passed to async path
             except self.retryable_exceptions as exc:
                 last_exc = exc
                 if attempt == self.max_attempts - 1:
@@ -68,8 +74,5 @@ class RetryOrchestrator:
                     attempt + 1, self.max_attempts, exc, delay
                 )
                 await asyncio.sleep(delay)
+        assert last_exc is not None
         raise last_exc
-
-
-# Import asyncio here to avoid circular import issues
-import asyncio

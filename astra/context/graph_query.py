@@ -1,7 +1,6 @@
 from collections import defaultdict, deque
 from astra.core.logger import get_logger
 from astra.models.graph_node import NodeType
-from astra.models.graph_edge import EdgeType
 
 logger = get_logger("astra.context.graph_query")
 

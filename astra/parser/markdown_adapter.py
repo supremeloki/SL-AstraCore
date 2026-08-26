@@ -5,7 +5,6 @@ from pathlib import Path
 
 from astra.ir.models import (
     FileRole,
-    IRDependency,
     IRFileNode,
     IRFileParseResult,
     IRVaultConceptNode,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import heapq
 import time
 from dataclasses import dataclass, field
-from enum import IntEnum, auto
+from enum import IntEnum
 from typing import Any, Optional
 
 

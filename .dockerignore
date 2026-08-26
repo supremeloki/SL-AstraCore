@@ -1,0 +1,13 @@
+.ait/
+.git/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+astra.egg-info/
+tests/
+docs/
+.claude/
+*.md
+!README.md

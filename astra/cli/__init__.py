@@ -50,12 +50,16 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return 0
 
-    record = orchestrator.get_repo(path)
-    if record is None or record.status.value != "active":
+    existing = orchestrator.get_repo(path)
+    if existing is not None and existing.status.value == "active":
+        record = existing
+    else:
         orchestrator.register_repo(path)
-        record = orchestrator.index_repo(path)
-        if record.status.value == "failed":
-            print(f"error: {record.error}", file=sys.stderr)
+        fresh_record = orchestrator.index_repo(path)
+        assert fresh_record is not None, "index_repo always returns a RepoRecord"
+        record = fresh_record
+        if fresh_record.status.value == "failed":
+            print(f"error: {fresh_record.error}", file=sys.stderr)
             return 1
     pack = orchestrator.query_context(path, seed_node_ids=[], query_intent=args.query)
     print(f"task: {pack.task_summary}")

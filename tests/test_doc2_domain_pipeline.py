@@ -5,7 +5,6 @@ import unittest
 from astra import AstraCore
 from astra.graph import DomainGraphEngine
 from astra.parser import UniversalParser
-from astra.agents import AgentAdapterLayer
 from astra.scanner import RepositoryScanner
 
 

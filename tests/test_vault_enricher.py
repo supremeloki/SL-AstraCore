@@ -7,7 +7,6 @@ from astra.graph.vault_enricher import (
 from astra.ir.models import (
     EdgeType,
     IRFileNode,
-    IRNode,
     NodeType,
     IRVaultConceptNode,
     VaultConceptKind,

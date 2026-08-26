@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import deque
 from typing import Optional, Sequence
 
 from astra.core.logger import get_logger

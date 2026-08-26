@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import json
 import os
 import time
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass
@@ -36,7 +34,7 @@ class SnapshotCompactor:
             with open(self._journal_path) as f:
                 lines = f.readlines()
             entries_before = len(lines)
-            space_before = sum(len(l) for l in lines)
+            space_before = sum(len(line) for line in lines)
 
             # Keep last N entries
             keep_lines = lines[-keep_last_n:] if len(lines) > keep_last_n else lines
@@ -47,7 +45,7 @@ class SnapshotCompactor:
             os.replace(tmp_path, self._journal_path)
 
             entries_after = len(keep_lines)
-            space_after = sum(len(l) for l in keep_lines)
+            space_after = sum(len(line) for line in keep_lines)
 
         return CompactionResult(
             journal_entries_before=entries_before,

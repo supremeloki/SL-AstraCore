@@ -13,15 +13,14 @@ from __future__ import annotations
 
 import os
 import time
-import threading
 import tempfile
 import pytest
 
 from astra.runtime.sandbox import ExecutionSandbox, SandboxConfig
 from astra.runtime.quota_enforcer import ResourceQuotaEnforcer, QuotaConfig
 from astra.runtime.cancellation import (
-    CancellationContext, CancelledError,
-    cancellation_scope, timeout_scope, cancel_all, get_current_context,
+    CancelledError,
+    cancellation_scope, timeout_scope, get_current_context,
 )
 from astra.runtime.timeout_enforcer import TimeoutEnforcer, TimeoutExceeded
 from astra.runtime.circuit_breaker import CircuitBreaker
@@ -220,6 +219,7 @@ class TestTimeoutEnforcer:
     def test_remaining_time(self):
         te = TimeoutEnforcer()
         deadline = te.set_deadline("t1", 10.0)
+        assert deadline is not None
         remain = te.remaining("t1")
         assert remain > 9.0
 

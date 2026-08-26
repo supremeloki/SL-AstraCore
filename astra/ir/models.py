@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum, auto
-from typing import Any, Optional, Protocol, Sequence
+from typing import Any, Optional
 
 from dataclasses import dataclass, field
 

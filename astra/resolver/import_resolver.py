@@ -9,9 +9,7 @@ from astra.ir.models import (
     EdgeType,
     IREdge,
     IRDependency,
-    IRFileNode,
     IRFileParseResult,
-    IRSymbol,
 )
 
 _JS_EXTS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
