@@ -8,7 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY pyproject.toml README.md ./
 COPY astra/ astra/
-COPY dashboard_app.py dashboard_real.html ./
+COPY dashboard_app.py dashboard_real.html manifest.webmanifest favicon.ico ./
+COPY static/ static/
 RUN pip install --no-cache-dir .
 
 # Non-root runtime; repo DBs and journal live in this mounted volume.

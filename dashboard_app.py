@@ -6,7 +6,8 @@ import os
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from astra.runtime.orchestrator import RuntimeOrchestrator
 from astra.runtime.metrics import MetricsCollector
@@ -591,6 +592,23 @@ def dashboard():
     from fastapi.responses import HTMLResponse as _HR
     html = (Path(__file__).parent / "dashboard_real.html").read_text(encoding="utf-8")
     return _HR(content=html, headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"})
+
+
+# ── Brand assets: favicon, PWA icons, manifest ─────────────────────────
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(Path(__file__).parent / "favicon.ico", media_type="image/x-icon")
+
+
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def web_manifest():
+    return FileResponse(
+        Path(__file__).parent / "manifest.webmanifest",
+        media_type="application/manifest+json",
+    )
 
 
 if __name__ == "__main__":

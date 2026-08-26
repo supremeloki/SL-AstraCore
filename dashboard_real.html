@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SL-AstraCore — Observatory</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-180.png">
+<meta name="theme-color" content="#090c1a">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -905,11 +911,15 @@ async function loadContext(){
     <div class="ctx-stat"><div class="ctx-stat-lbl">Nodes</div><div class="ctx-stat-val">${fmt(d.node_count)}</div></div>
     <div class="ctx-stat"><div class="ctx-stat-lbl">Edges</div><div class="ctx-stat-val">${fmt(d.edge_count)}</div></div>
     <div class="ctx-stat"><div class="ctx-stat-lbl">Confidence</div><div class="ctx-stat-val">${(d.score??0).toFixed(2)}</div></div>`;
-    $('ctxFiles').innerHTML=(d.nodes||[]).slice(0,10).map(n=>{
-      const pct=Math.round((n.relevance??d.score??0)*100);
-      const col=typeColor(n.type);
-      return `<div class="topfile"><span class="tf-name" title="${esc(n.file_path||n.name)}">${esc(n.name)}</span><span class="tf-bar"><span class="tf-fill" style="width:${Math.max(4,Math.min(100,pct))}%;background:${col};display:block"></span></span><span class="tf-score" style="color:${col}">${pct}%</span></div>`;
-    }).join('');
+    if(!(d.nodes||[]).length){
+      $('ctxFiles').innerHTML='<div class="empty">No matching files — try a filename or symbol from the repo.</div>';
+    } else {
+      $('ctxFiles').innerHTML=(d.nodes||[]).slice(0,10).map(n=>{
+        const pct=Math.round((n.relevance??d.score??0)*100);
+        const col=typeColor(n.type);
+        return `<div class="topfile"><span class="tf-name" title="${esc(n.file_path||n.name)}">${esc(n.name)}</span><span class="tf-bar"><span class="tf-fill" style="width:${Math.max(4,Math.min(100,pct))}%;background:${col};display:block"></span></span><span class="tf-score" style="color:${col}">${pct}%</span></div>`;
+      }).join('');
+    }
   }catch(e){ $('ctxStats').style.display='none'; }
 }
 
