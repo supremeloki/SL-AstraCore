@@ -275,11 +275,6 @@ select:focus,input:focus{outline:none;border-color:var(--gold)}
 .tf-fill{height:100%;border-radius:2px;transition:width .3s ease}
 .tf-score{font-family:"IBM Plex Mono",monospace;font-size:.62rem;min-width:34px;text-align:right;flex:none}
 
-.exec-progress{margin-bottom:.55rem}
-.progress-label{display:flex;justify-content:space-between;font-size:.68rem;color:var(--dim)}
-.progress-label b{font-family:"IBM Plex Mono",monospace;font-weight:500}
-.progress-bar{height:4px;background:var(--line-soft);border-radius:2px;overflow:hidden;margin-top:.3rem}
-.progress-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--amber));border-radius:2px;transition:width .3s ease}
 .step-table{width:100%;border-collapse:collapse;font-size:.68rem}
 .step-table th{text-align:left;color:var(--mute);font-weight:500;padding:.28rem .35rem;border-bottom:1px solid var(--line-soft);letter-spacing:.06em;text-transform:uppercase;font-size:.5625rem}
 .step-table td{padding:.28rem .35rem;border-bottom:1px solid var(--line-soft);color:var(--dim)}
@@ -474,10 +469,6 @@ select:focus,input:focus{outline:none;border-color:var(--gold)}
       <span id="monitorStatus" style="font-size:.6rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)">Idle</span>
     </div>
     <div class="plate-bd">
-      <div class="exec-progress">
-        <div class="progress-label"><span>Pipeline progress</span><b id="monitorPct">0%</b></div>
-        <div class="progress-bar"><div class="progress-fill" id="monitorBar" style="width:0%"></div></div>
-      </div>
       <table class="step-table"><thead><tr><th>Step</th><th>Source</th></tr></thead><tbody id="stepsBody"></tbody></table>
     </div>
   </section>
@@ -587,7 +578,14 @@ const fileName = p => String(p||'').split('/').pop().split('\\').pop();
 async function loadOverview(){
   try{
     const d = await api('GET','/api/status');
-    repos = d.repos_detail || [];
+    const fresh = d.repos_detail || [];
+    // Re-point the selection at the refreshed object. Replacing the array left
+    // curRepo holding a stale snapshot, so every later request used old counts.
+    if(curRepo){
+      const still = fresh.find(r => r.path === curRepo.path);
+      if(still) curRepo = still;
+    }
+    repos = fresh;
     renderMetrics(d);
     renderRepoSelect();
     renderRuntime(d);
@@ -699,7 +697,9 @@ async function loadDiff(filePath){
       <button class="btn btn-primary btn-sm" disabled title="Compose old_text/new_text first">Apply patch</button>
       <button class="btn btn-ghost btn-sm" onclick="loadDiff(selectedFile)">Refresh</button>
     </div>`;
-  }catch(e){ console.error('diff', e); }
+  }catch(e){
+    $('patchBody').innerHTML=`<div class="empty">Could not load this file.<br><small>${esc(e.message||'')}</small></div>`;
+  }
 }
 
 // ── Star chart ─────────────────────────────────────────────────────────
@@ -758,9 +758,18 @@ function tickGraph(){
     });
     if((tickN>60 && energy<nodes.length*.05) || tickN>500) settled=true;
     drawGraph();
-  } else if(tickN===1 || !settled===false && tickN<=2){ drawGraph(); }
-  if(!REDUCED || !settled) animId=requestAnimationFrame(tickGraph);
-  else animId=null;
+  } else {
+    // Already settled. Paint once more (a wake may have moved the camera or the
+    // canvas may have been resized since the last physics frame) and idle.
+    if (tickN <= 2) drawGraph();
+    animId = null;
+    return;
+  }
+  // Keep the loop alive only while the layout is still moving. The previous
+  // condition (`!REDUCED || !settled`) was always true for normal users, so the
+  // simulation ran at 60fps forever, and under reduced-motion the first wake
+  // killed the loop after a single frame, freezing every later interaction.
+  animId = requestAnimationFrame(tickGraph);
 }
 function wake(){ if(settled){ settled=false; tickN=0; } if(!animId) animId=requestAnimationFrame(tickGraph); }
 
@@ -902,17 +911,24 @@ async function loadExec(){
     <div class="detail-row"><span class="detail-lbl">Nodes</span><span class="detail-val">${fmt(d.nodes)}</span></div>
     <div class="detail-row"><span class="detail-lbl">Edges</span><span class="detail-val">${fmt(d.edges)}</span></div>
     <div class="detail-row"><span class="detail-lbl">Last indexed</span><span class="detail-val">${ago(d.last_indexed)}</span></div>`;
-  }catch(e){}
+  }catch(e){
+    $('execBody').innerHTML=`<div class="empty">Could not read pipeline state.<br><small>${esc(e.message||'')}</small></div>`;
+  }
 }
 
 // ── Context ────────────────────────────────────────────────────────────
-let ctxTimer=null;
+let ctxTimer=null, ctxSeq=0;
 async function loadContext(){
   if(!curRepo) return;
   const q=$('ctxQuery').value.trim();
   if(!q){ $('ctxStats').style.display='none'; $('ctxFiles').innerHTML=''; return; }
+  // Context builds are slow, so a slow first request could land after a fast
+  // second one and render the wrong answer. Only the newest request may paint.
+  const seq = ++ctxSeq;
+  const repoPath = curRepo.path;
   try{
-    const d=await api('GET',`/api/context?path=${encodeURIComponent(curRepo.path)}&query=${encodeURIComponent(q)}&max_tokens=8000`);
+    const d=await api('GET',`/api/context?path=${encodeURIComponent(repoPath)}&query=${encodeURIComponent(q)}&max_tokens=8000`);
+    if(seq !== ctxSeq) return;
     $('ctxStats').style.display='grid';
     $('ctxStats').innerHTML=`
     <div class="ctx-stat"><div class="ctx-stat-lbl">Tokens</div><div class="ctx-stat-val">${fmt(d.estimated_tokens)}</div></div>
@@ -928,7 +944,11 @@ async function loadContext(){
         return `<div class="topfile"><span class="tf-name" title="${esc(n.file_path||n.name)}">${esc(n.name)}</span><span class="tf-bar"><span class="tf-fill" style="width:${Math.max(4,Math.min(100,pct))}%;background:${col};display:block"></span></span><span class="tf-score" style="color:${col}">${pct}%</span></div>`;
       }).join('');
     }
-  }catch(e){ $('ctxStats').style.display='none'; }
+  }catch(e){
+    $('ctxStats').style.display='grid';
+    $('ctxStats').innerHTML='';
+    $('ctxFiles').innerHTML=`<div class="empty">Context request failed.<br><small>${esc(e.message||'')}</small></div>`;
+  }
 }
 
 // ── Runtime / Telemetry / Signals ─────────────────────────────────────
@@ -1029,17 +1049,26 @@ function prependEvent(evt){
   list.prepend(div);
   while(list.children.length>14) list.removeChild(list.lastChild);
 }
-let monitorSteps=0;
+// The runtime emits lifecycle events, not a plan with N steps. Counting events
+// made the bar hit 100% after eight unrelated log lines, so it showed fake
+// progress. Report the last phase honestly instead of a synthetic percentage.
+const _PHASES = [
+  [/repo_registered|registered/i, 'Registered'],
+  [/scan_started|scan/i, 'Scanning'],
+  [/graph_updated|indexed|index/i, 'Indexing'],
+  [/context_built|context/i, 'Building context'],
+  [/patch_applied|patch/i, 'Applying patch'],
+];
 function updateMonitor(evt){
-  const st=$('monitorStatus'), pct=$('monitorPct'), bar=$('monitorBar'), steps=$('stepsBody');
+  const st=$('monitorStatus'), steps=$('stepsBody');
   const t=evt.type||'';
-  if(t.includes('started')){ st.textContent='Running'; st.style.color='var(--amber)'; monitorSteps=0; }
-  if(t.includes('completed')||t.includes('updated')){
-    st.textContent='Complete'; st.style.color='var(--green)';
+  const phase = _PHASES.find(([re]) => re.test(t));
+  if(t.includes('started') || t.includes('scan')){
+    st.textContent='Running'; st.style.color='var(--amber)';
+  } else if(t.includes('completed') || t.includes('updated') || t.includes('failed')){
+    st.textContent=phase?phase[1]:'Complete';
+    st.style.color = t.includes('failed') ? 'var(--red)' : 'var(--green)';
   }
-  monitorSteps++;
-  const prog=Math.min(100,monitorSteps*14);
-  pct.textContent=prog+'%'; bar.style.width=prog+'%';
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><span class="step-dot ${t.includes('started')?'run':'done'}"></span>${esc(t)}</td><td>${esc(evt.source||'runtime')}</td>`;
   steps.prepend(tr);
@@ -1050,6 +1079,12 @@ function updateMonitor(evt){
 setupCanvas();
 setupRuntimeStream();
 loadOverview();
+// Seed the Signal Log from the journal on load and periodically as a fallback
+// for when the SSE connection drops. Previously this function was defined but
+// never called, so the panel showed "Waiting for events…" forever and a
+// reconnecting EventSource never repopulated it.
+loadEvents();
+setInterval(loadEvents, 20000);
 // SSE pushes events live; poll /api/status less often as a fallback only.
 setInterval(loadOverview, 15000);
 $('ctxQuery').addEventListener('input',()=>{ clearTimeout(ctxTimer); ctxTimer=setTimeout(loadContext,350); });
