@@ -112,6 +112,8 @@ def status():
                 "files": r.file_count,
                 "backend": r.storage_backend,
                 "last_indexed": r.last_indexed,
+                "error": r.error,
+                "warnings": list(r.warnings)[:20],
             }
             for r in repos
         ],
@@ -163,6 +165,7 @@ async def add_repo(payload: dict):
         "edges": rec.edge_count,
         "files": rec.file_count,
         "last_indexed": rec.last_indexed,
+        "warnings": list(rec.warnings)[:20],
     }
 
 

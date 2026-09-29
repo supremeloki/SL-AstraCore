@@ -601,12 +601,20 @@ function renderMetrics(d){
   const tn = repos.reduce((a,x)=>a+(x.nodes||0),0);
   const te = repos.reduce((a,x)=>a+(x.edges||0),0);
   const last = repos.length ? repos.map(r=>r.last_indexed).sort().pop() : null;
+  const warnings = repos.flatMap(r => (r.warnings||[]).map(w => `${r.name}: ${w}`));
+  const failed = repos.filter(r=>r.status==='failed');
   $('metricsRow').innerHTML = `
   <div class="stat"><div class="stat-lbl">Repositories</div><div class="stat-val">${fmt(d.repos)}</div><div class="stat-sub">${repos.filter(r=>r.status==='active').length} active</div></div>
   <div class="stat"><div class="stat-lbl">Files Indexed</div><div class="stat-val">${fmt(tf)}</div><div class="stat-sub">full corpus</div></div>
   <div class="stat"><div class="stat-lbl">Graph Nodes</div><div class="stat-val">${fmt(tn)}</div><div class="stat-sub">stars on chart</div></div>
   <div class="stat"><div class="stat-lbl">Graph Edges</div><div class="stat-val">${fmt(te)}</div><div class="stat-sub">relations traced</div></div>
-  <div class="stat"><div class="stat-lbl">Last Scan</div><div class="stat-val" style="font-size:.95rem">${last?ago(last):'—'}</div><div class="stat-sub">incremental, resumable</div></div>`;
+  <div class="stat"><div class="stat-lbl">Last Scan</div><div class="stat-val" style="font-size:.95rem">${last?ago(last):'—'}</div><div class="stat-sub">incremental, resumable</div></div>
+  <div class="stat"${warnings.length||failed.length?'':' style="display:none"'} title="${esc(warnings.slice(0,20).join('\n'))}">
+    <div class="stat-lbl" style="color:var(--amber)">Index Warnings</div>
+    <div class="stat-val" style="color:var(--amber)">${fmt(warnings.length + failed.length)}</div>
+    <div class="stat-sub" style="color:var(--amber)">${failed.length?failed.length+' repo failed':'files skipped'}</div>
+  </div>`;
+  if (warnings.length) toast(`${warnings.length} file(s) could not be indexed — see Index Warnings`, true);
 }
 
 function renderRepoSelect(){

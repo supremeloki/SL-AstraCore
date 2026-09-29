@@ -94,6 +94,7 @@ class RuntimeOrchestrator:
             raise ValueError(f"Repository not registered: {root_path}")
 
         record.status = RepoStatus.INDEXING
+        record.warnings = []
 
         if not Path(root_path).exists():
             record.status = RepoStatus.FAILED
@@ -105,16 +106,26 @@ class RuntimeOrchestrator:
             # 1. Scan repo
             files = self._scan_repo_files(root_path, file_extensions)
 
-            # 2. Parse all files
+            # 2. Parse all files. A file that fails to read (sharing violation from
+            # an editor/AV/git, transient IO) is NOT the same as a deleted file —
+            # it must keep its existing graph nodes so a later index can recover.
             parse_results = []
+            unreadable_files: list[str] = []
             for file_path in files:
                 try:
                     content = Path(file_path).read_text(encoding="utf-8", errors="replace")
-                    result = self._parser_registry.parse(file_path, content)
-                    if result:
-                        parse_results.append(result)
-                except Exception:
+                except OSError as exc:
+                    unreadable_files.append(file_path)
+                    record.warnings.append(f"unreadable: {file_path} ({exc})")
                     continue
+                try:
+                    result = self._parser_registry.parse(file_path, content)
+                except Exception as exc:
+                    unreadable_files.append(file_path)
+                    record.warnings.append(f"parse failed: {file_path} ({exc})")
+                    continue
+                if result:
+                    parse_results.append(result)
 
             # 3. Build graph storage
             storage = StorageProvider(
@@ -178,10 +189,13 @@ class RuntimeOrchestrator:
             nodes_to_upsert.extend(extra_nodes)
             edges_to_upsert.extend(extra_edges)
 
-            # 6. Drop nodes for files removed since last index (cascades edges),
-            # then persist everything in one atomic batch.
+            # 6. Drop nodes for files actually removed since last index (cascades
+            # edges), then persist everything in one atomic batch. Files that merely
+            # failed to read this run are excluded from the delete set so a
+            # transient lock cannot silently destroy their subgraph.
             fresh_ids = {n.id for n in nodes_to_upsert}
-            stale_ids = sorted(storage.get_node_ids() - fresh_ids)
+            preserved_ids = {f"file:{path}" for path in unreadable_files}
+            stale_ids = sorted(storage.get_node_ids() - fresh_ids - preserved_ids)
 
             mutator.apply_batch(
                 nodes_to_delete=stale_ids,
@@ -190,7 +204,7 @@ class RuntimeOrchestrator:
             )
 
             # 7. Update record
-            record.file_count = len(parse_results)
+            record.file_count = len(parse_results) + len(unreadable_files)
             record.node_count = storage.node_count()
             record.edge_count = storage.edge_count()
             record.last_indexed = datetime.now(timezone.utc).isoformat()

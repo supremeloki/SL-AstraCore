@@ -26,4 +26,5 @@ class RepoRecord:
     edge_count: int = 0
     last_indexed: Optional[str] = None
     error: Optional[str] = None
+    warnings: list[str] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
