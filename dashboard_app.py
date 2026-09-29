@@ -207,7 +207,7 @@ def context_pack(path: str, query: str, max_tokens: int = 8000):
         "task_summary": pack.task_summary,
         "node_count": len(pack.nodes),
         "edge_count": len(pack.edges),
-        "estimated_tokens": min(pack.total_tokens, max_tokens) if max_tokens else pack.total_tokens,
+        "estimated_tokens": min(pack.total_tokens, pack.token_budget) if pack.token_budget else pack.total_tokens,
         "total_tokens": pack.total_tokens,
         "token_budget": pack.token_budget,
         "confidence": pack.confidence,

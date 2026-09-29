@@ -15,7 +15,9 @@ from astra.ir.models import (
     IRContextPack,
     IREdge,
     IRNode,
+    IRSymbol,
     NodeType,
+    SymbolKind,
 )
 from astra.models.graph_node import GraphNode as GraphNodeModel
 from astra.storage.backend import StorageBackend
@@ -137,6 +139,7 @@ class RuntimeOrchestrator:
 
             # 4. Normalize file nodes and keep path->id map for edge endpoints
             nodes_to_upsert = []
+            symbol_nodes: list[IRNode] = []
             path_to_node_id = {}
             for result in parse_results:
                 if result.file_node:
@@ -157,6 +160,28 @@ class RuntimeOrchestrator:
                     )
                     nodes_to_upsert.append(canonical_node)
                     path_to_node_id[file_node.file_path] = file_node.id
+
+                    # 4b. Promote parsed symbols (functions/classes) to real graph
+                    # nodes. Without this the graph is files-only and every context
+                    # pack can only ever name files, never point at a function.
+                    for symbol in result.symbols:
+                        symbol_nodes.append(
+                            IRNode(
+                                id=_symbol_node_id(file_node.id, symbol),
+                                type=_symbol_node_type(symbol),
+                                name=symbol.name,
+                                source=f"symbol:{file_node.language or 'unknown'}",
+                                confidence=file_node.confidence,
+                                metadata={
+                                    "file_path": file_node.file_path,
+                                    "file_node_id": file_node.id,
+                                    "kind": symbol.kind.name,
+                                    "line_start": symbol.line_start,
+                                    "line_end": symbol.line_end,
+                                    "language": file_node.language,
+                                },
+                            )
+                        )
 
             # 5. Resolve imports; resolver works in root-relative space, map
             # back to canonical file: node IDs.
@@ -189,13 +214,34 @@ class RuntimeOrchestrator:
             nodes_to_upsert.extend(extra_nodes)
             edges_to_upsert.extend(extra_edges)
 
+            # 5c. Register symbol nodes and their BELONGS_TO edges to their file.
+            nodes_to_upsert.extend(symbol_nodes)
+            edges_to_upsert.extend(
+                IREdge(
+                    from_node=node.id,
+                    to_node=node.metadata["file_node_id"],
+                    type=EdgeType.BELONGS_TO,
+                    weight=0.6,
+                    confidence=node.confidence,
+                )
+                for node in symbol_nodes
+            )
+
             # 6. Drop nodes for files actually removed since last index (cascades
             # edges), then persist everything in one atomic batch. Files that merely
-            # failed to read this run are excluded from the delete set so a
-            # transient lock cannot silently destroy their subgraph.
+            # failed to read this run are excluded from the delete set — along with
+            # every node that hangs off them (symbol nodes, enrichment nodes) — so a
+            # transient lock cannot silently destroy a file's subgraph.
             fresh_ids = {n.id for n in nodes_to_upsert}
-            preserved_ids = {f"file:{path}" for path in unreadable_files}
-            stale_ids = sorted(storage.get_node_ids() - fresh_ids - preserved_ids)
+            existing_ids = storage.get_node_ids()
+            preserved_file_ids = {f"file:{path}" for path in unreadable_files}
+            preserved_ids = {nid for nid in existing_ids if nid in preserved_file_ids}
+            preserved_ids |= {
+                nid
+                for nid in existing_ids
+                if any(nid.startswith(f"{fid}::") for fid in preserved_file_ids)
+            }
+            stale_ids = sorted(existing_ids - fresh_ids - preserved_ids)
 
             mutator.apply_batch(
                 nodes_to_delete=stale_ids,
@@ -289,25 +335,82 @@ class RuntimeOrchestrator:
             kg.edges.append(e)
 
         engine = TaskContextEngine(kg)
-        if max_tokens:
+        if max_tokens and max_tokens > 0:
             engine._token_budget.set_budget(max_tokens)
         _analysis, _pack, _deps, _risks = engine.build_pack(query_intent)
+
+        def _file_path_of(node: dict) -> str:
+            explicit = node.get("file_path") or ""
+            if explicit:
+                return explicit
+            node_id = node.get("id", "")
+            return node_id.removeprefix("file:") if node_id.startswith("file:") else ""
+
+        def _snippet_for(node: dict, char_limit: int = 0) -> str:
+            """Read the real source this node points at.
+
+            A symbol node carries line_start/line_end, so an agent gets the function
+            body; a file node gets its head. This is what makes a context pack
+            usable by an agent instead of a bare list of filenames.
+            """
+            node_id = node.get("id", "")
+            graph_node = kg.node_index.get(node_id)
+            props = graph_node.properties if graph_node is not None else {}
+            path = node.get("file_path") or props.get("file_path") or ""
+            if not path and node_id.startswith("file:"):
+                path = node_id.removeprefix("file:")
+            if not path:
+                return ""
+            source_file = Path(path)
+            if not source_file.is_absolute():
+                source_file = Path(record.root_path) / path
+            try:
+                lines = source_file.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                return ""
+            if not lines:
+                return ""
+            start = int(props.get("line_start") or 0)
+            if start > 0:
+                end = min(int(props.get("line_end") or start), start + _SNIPPET_MAX_LINES - 1)
+                body = lines[start - 1:end]
+                header = f"# {node.get('label', source_file.name)} — {source_file.name}:{start}-{end}"
+                text = "\n".join([header, *body])
+            else:
+                text = "\n".join(lines[:_SNIPPET_MAX_LINES])
+            if char_limit and len(text) > char_limit:
+                text = text[:char_limit].rsplit("\n", 1)[0] + "\n# … truncated to fit token budget"
+            return text
 
         def _ir_node_type(node_id: str) -> NodeType:
             legacy = node_type_from_ir(kg.node_index[node_id].node_type)
             return NodeType[legacy.name]
 
-        nodes_ref = tuple(
-            ContextNodeRef(
-                node_id=n["id"],
-                node_type=_ir_node_type(n["id"]) if n["id"] in kg.node_index else NodeType.FILE,
-                name=n.get("label", ""),
-                file_path=(n.get("file_path") or n["id"].removeprefix("file:")) if n["id"].startswith("file:") else n.get("file_path", ""),
-                relevance_score=float(n.get("relevance", 1.0)),
+        # 2.3 Snippets must fit the caller's budget. Each snippet is estimated
+        # (~4 chars/token) and truncated to the remaining allowance, so a pack
+        # with real code can never exceed the token budget it reports.
+        effective_budget = max_tokens if max_tokens and max_tokens > 0 else _DEFAULT_TOKEN_BUDGET
+        snippet_allowance = int(effective_budget * 0.7)
+        snippet_chars = max(0, snippet_allowance * 4)
+        spent = 0
+        nodes_with_snippets: list[ContextNodeRef] = []
+        for n in _pack.relevant_nodes:
+            if not isinstance(n, dict):
+                continue
+            remaining = snippet_chars - spent
+            snippet = _snippet_for(n, char_limit=remaining) if remaining > 200 else ""
+            spent += len(snippet)
+            nodes_with_snippets.append(
+                ContextNodeRef(
+                    node_id=n["id"],
+                    node_type=_ir_node_type(n["id"]) if n["id"] in kg.node_index else NodeType.FILE,
+                    name=n.get("label", ""),
+                    file_path=_file_path_of(n),
+                    snippet=snippet,
+                    relevance_score=float(n.get("relevance", 1.0)),
+                )
             )
-            for n in _pack.relevant_nodes
-            if isinstance(n, dict)
-        )
+        nodes_ref = tuple(nodes_with_snippets)
         selected_ids = {nr.node_id for nr in nodes_ref}
         edges_ref = tuple(
             ContextEdgeRef(
@@ -329,7 +432,7 @@ class RuntimeOrchestrator:
             dependency_summary=tuple(str(d) for d in _pack.critical_dependencies[:20]),
             hidden_risks=tuple(_risks.medium_risk_nodes[:10]),
             total_tokens=_pack.token_estimate,
-            token_budget=max_tokens or 0,
+            token_budget=effective_budget,
             confidence=_analysis.confidence,
         )
 
@@ -413,3 +516,28 @@ class RuntimeOrchestrator:
         if record.status != RepoStatus.ACTIVE:
             raise RuntimeError(f"Repository not active: {root_path} (status={record.status.value})")
         return record
+
+
+_SNIPPET_MAX_LINES = 40
+_DEFAULT_TOKEN_BUDGET = 32000
+_SYMBOL_KIND_TO_NODE_TYPE = {
+    SymbolKind.FUNCTION: NodeType.FUNCTION,
+    SymbolKind.CLASS: NodeType.CLASS,
+    SymbolKind.METHOD: NodeType.METHOD,
+    SymbolKind.VARIABLE: NodeType.VARIABLE,
+    SymbolKind.CONSTANT: NodeType.CONSTANT,
+    SymbolKind.TYPE_ALIAS: NodeType.CLASS,
+}
+
+
+def _symbol_node_type(symbol: IRSymbol) -> NodeType:
+    return _SYMBOL_KIND_TO_NODE_TYPE.get(symbol.kind, NodeType.FUNCTION)
+
+
+def _symbol_node_id(file_node_id: str, symbol: IRSymbol) -> str:
+    """Stable, collision-resistant id for a symbol node.
+
+    A file can define the same name twice (methods in different classes), so the
+    line number participates in the identity.
+    """
+    return f"{file_node_id}::symbol:{symbol.name}:{symbol.line_start}"
