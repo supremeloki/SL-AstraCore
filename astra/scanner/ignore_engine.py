@@ -37,17 +37,12 @@ class IgnoreEngine:
                 if fnmatch.fnmatch(part, pattern):
                     return True
         ext = os.path.splitext(rel_path)[1]
-        if ext in self._ext_patterns:
-            return True
-        return False
+        return ext in self._ext_patterns
 
     def is_ignored_dir(self, dir_name):
         if dir_name in self._dir_patterns:
             return True
-        for pattern in self._custom_patterns:
-            if fnmatch.fnmatch(dir_name, pattern):
-                return True
-        return False
+        return any(fnmatch.fnmatch(dir_name, pattern) for pattern in self._custom_patterns)
 
     def is_ignored_extension(self, extension):
         return extension in self._ext_patterns

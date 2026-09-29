@@ -9,11 +9,11 @@ def test_generate_context_pack():
     n1 = IRNode(id="n1", type=NodeType.FILE, name="a", source="t")
     n2 = IRNode(id="n2", type=NodeType.FILE, name="b", source="t")
     n3 = IRNode(id="n3", type=NodeType.FILE, name="c", source="t")
-    
+
     storage.add_node(n1)
     storage.add_node(n2)
     storage.add_node(n3)
-    
+
     # n1 -> n2 -> n3
     storage.add_edge(IREdge(from_node="n1", to_node="n2", type=EdgeType.IMPORTS))
     storage.add_edge(IREdge(from_node="n2", to_node="n3", type=EdgeType.IMPORTS))

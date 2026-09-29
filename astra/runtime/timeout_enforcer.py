@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import threading
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from typing import Optional
 
@@ -68,10 +68,8 @@ class TimeoutEnforcer:
         if task_id in self._escalation_callbacks:
             cb = self._escalation_callbacks[task_id]
             if callable(cb):
-                try:
+                with suppress(Exception):
                     cb(task_id)
-                except Exception:
-                    pass
 
     def check(self, task_id: str) -> bool:
         """Returns True if deadline exceeded."""

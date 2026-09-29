@@ -43,9 +43,7 @@ class ResourceManager:
     def enforce_timeout(self, task_id: str, elapsed: float) -> bool:
         """Returns True if timeout exceeded."""
         quota = self._active_quotas.get(task_id)
-        if quota and elapsed > quota.max_execution_seconds:
-            return True
-        return False
+        return bool(quota and elapsed > quota.max_execution_seconds)
 
     def enforce_memory(self, task_id: str) -> tuple[bool, str]:
         """Returns False if memory quota exceeded."""

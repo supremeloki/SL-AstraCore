@@ -1,0 +1,28 @@
+line-length = 120
+target-version = "py311"
+
+[lint]
+# The project's actual quality bar. Everything here is fixable today and
+# catches real defects (blind excepts, unused code, deprecated typing).
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "SIM",  # simplify
+    "RET",  # return consistency
+    "ARG",  # unused arguments
+]
+ignore = [
+    "E501",    # line length is handled by the formatter
+    "B008",    # FastAPI Depends() in defaults is the framework idiom
+    "SIM108",  # ternary is not always clearer than if/else
+    "RET504",  # assigning before return is fine and often clearer
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["ARG", "B011"]
+
+[format]
+quote-style = "double"

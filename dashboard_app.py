@@ -415,10 +415,10 @@ async def patch_analyze(payload: Optional[dict] = None):
         # Compute AST diff
         old_nodes = {n for n in ast.walk(old_ast) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
         new_nodes = {n for n in ast.walk(new_ast) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
-        
+
         old_names = {n.name for n in old_nodes}
         new_names = {n.name for n in new_nodes}
-        
+
         added = new_names - old_names
         removed = old_names - new_names
         modified = old_names & new_names
@@ -451,7 +451,7 @@ async def patch_analyze(payload: Optional[dict] = None):
         risk += len(modified) * 3  # Modifications
         risk += dep_impact["downstream"] * 2  # Downstream impact
         risk += len(added) * 1  # New symbols (lower risk)
-        
+
         # Confidence: high if small change, low if many dependencies
         confidence = max(0.1, 1.0 - (risk / 100))
 
@@ -558,7 +558,7 @@ async def replay_executions(payload: Optional[dict] = None):
 async def event_stream(request: Request):
     """Server-Sent Events stream for live dashboard updates."""
     from sse_starlette.sse import EventSourceResponse
-    
+
     async def event_generator():
         last_idx = len(_event_bus.log())
         try:
@@ -582,7 +582,7 @@ async def event_stream(request: Request):
                 await asyncio.sleep(0.5)
         except asyncio.CancelledError:
             pass
-    
+
     return EventSourceResponse(event_generator())
 
 

@@ -103,9 +103,9 @@ class BlueprintEngine:
             decisions.append("Python dependencies are declared through requirements.txt.")
         if any("fastapi" in getattr(f, "rel_path", "").lower() for f in project_index.files):
             frontend = "dashboard/api surface"
-        if any("astra.yaml" == f.rel_path.lower() for f in project_index.files):
+        if any(f.rel_path.lower() == "astra.yaml" for f in project_index.files):
             decisions.append("astra.yaml is the project configuration source.")
-        database = "duckdb/sqlite configured" if any("astra.yaml" == f.rel_path.lower() for f in project_index.files) else ""
+        database = "duckdb/sqlite configured" if any(f.rel_path.lower() == "astra.yaml" for f in project_index.files) else ""
         return TechnologyStack(
             backend=backend,
             frontend=frontend,

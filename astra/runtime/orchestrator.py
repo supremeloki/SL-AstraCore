@@ -370,9 +370,8 @@ class RuntimeOrchestrator:
                 continue
             if any(rel_str.startswith(prefix) for prefix in ignore_prefixes):
                 continue
-            if file_extensions:
-                if not any(str(path).endswith(ext) for ext in file_extensions):
-                    continue
+            if file_extensions and not any(str(path).endswith(ext) for ext in file_extensions):
+                continue
             files.append(str(path))
 
         return sorted(files)

@@ -116,17 +116,15 @@ class TestTracer:
 
     def test_nested_spans(self):
         tracer = Tracer()
-        with tracer.trace("outer") as outer:
-            with tracer.trace("inner", parent=outer) as inner:
-                pass
+        with tracer.trace("outer") as outer, tracer.trace("inner", parent=outer) as inner:
+            pass
         assert inner.parent_span_id == outer.span_id
         assert len(tracer.export_spans()) == 2
 
     def test_span_error_handling(self):
         tracer = Tracer()
-        with pytest.raises(ValueError):
-            with tracer.trace("op"):
-                raise ValueError("boom")
+        with pytest.raises(ValueError), tracer.trace("op"):
+            raise ValueError("boom")
         spans = tracer.export_spans()
         assert len(spans) == 1
         assert spans[0]["tags"].get("error") == "true"

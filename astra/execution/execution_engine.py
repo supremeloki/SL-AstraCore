@@ -89,7 +89,7 @@ class ExecutionEngine:
                 execution_result.execution_log.append({"status": "failed", "error": str(exc)})
         else:
             execution_result.execution_log.append({"status": "dry_run_complete"})
-            
+
         return execution_result
 
     def _ordered_specs(self, change_specs, knowledge_graph):

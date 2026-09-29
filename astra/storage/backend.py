@@ -65,9 +65,8 @@ class StorageProvider:
             from astra.storage.duckdb_backend import DuckDBBackend
             backend_obj: StorageBackend = DuckDBBackend(self._db_path)
             return backend_obj
-        elif self._backend_name == "sqlite":
+        if self._backend_name == "sqlite":
             from astra.storage.sqlite_backend import SQLiteBackend
             backend_obj = SQLiteBackend(self._db_path)
             return backend_obj
-        else:
-            raise ValueError(f"Unknown backend: {self._backend_name}")
+        raise ValueError(f"Unknown backend: {self._backend_name}")

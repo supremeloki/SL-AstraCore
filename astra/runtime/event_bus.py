@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Any
 from collections import defaultdict
+import contextlib
 
 
 @dataclass
@@ -32,10 +33,8 @@ class EventBus:
     def emit(self, event: RuntimeEvent) -> None:
         self._event_log.append(event)
         for handler in self._subscribers.get(event.event_type, ()):
-            try:
+            with contextlib.suppress(Exception):
                 handler(event)
-            except Exception:
-                pass
 
     def log(self) -> list[RuntimeEvent]:
         return list(self._event_log)

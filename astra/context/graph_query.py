@@ -102,7 +102,7 @@ class GraphQuery:
                 continue
             if nid.startswith("concept:"):
                 related.add(nid)
-            for neighbor, edge in self._adj.get(nid, []):
+            for neighbor, _edge in self._adj.get(nid, []):
                 if neighbor not in visited:
                     visited.add(neighbor)
                     queue.append((neighbor, depth + 1))

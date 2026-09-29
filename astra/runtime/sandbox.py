@@ -45,15 +45,10 @@ class ExecutionSandbox:
 
         # If no allowed paths specified, allow only temp dir
         if not self.config.allowed_paths:
-            if self._temp_dir and path_obj.is_relative_to(Path(self._temp_dir).resolve()):
-                return True
-            return False
+            return bool(self._temp_dir and path_obj.is_relative_to(Path(self._temp_dir).resolve()))
 
         # Check against allowed paths
-        for allowed in self.config.allowed_paths:
-            if path_obj.is_relative_to(Path(allowed).resolve()):
-                return True
-        return False
+        return any(path_obj.is_relative_to(Path(allowed).resolve()) for allowed in self.config.allowed_paths)
 
     @contextmanager
     def isolate(self):
@@ -89,9 +84,7 @@ class ExecutionSandbox:
         """Validate if file access is permitted."""
         if not self._is_path_allowed(path):
             return False
-        if write and not self.config.allow_filesystem_write:
-            return False
-        return True
+        return not (write and not self.config.allow_filesystem_write)
 
     def validate_network_access(self, host: str, port: int) -> bool:
         """Validate if network access is permitted."""

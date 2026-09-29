@@ -19,14 +19,12 @@ class SafetyEngine:
 
     def run_safe(self, task_id: str, action: Callable, *args, **kwargs):
         """Execute a task within the full safety stack."""
-        with self.sandbox.isolate():
-            with self.quota.enforce():
-                with self.timeout.enforce(task_id, 300):
-                    if self.circuit_breaker.allow():
-                        try:
-                            return action(*args, **kwargs)
-                        except Exception as e:
-                            self.circuit_breaker.record_failure()
-                            raise e
-                    else:
-                        raise RuntimeError("Circuit breaker open")
+        with self.sandbox.isolate(), self.quota.enforce(), self.timeout.enforce(task_id, 300):
+            if self.circuit_breaker.allow():
+                try:
+                    return action(*args, **kwargs)
+                except Exception as e:
+                    self.circuit_breaker.record_failure()
+                    raise e
+            else:
+                raise RuntimeError("Circuit breaker open")

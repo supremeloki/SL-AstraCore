@@ -18,7 +18,7 @@ def _build_graph():
     for name in ["a", "b", "c", "d", "e"]:
         storage.add_node(IRNode(id=f"file:{name}.py", type=NodeType.FILE, name=f"{name}.py", source="t"))
     ids = [f"file:{n}.py" for n in ["a", "b", "c", "d", "e"]]
-    for src, dst in zip(ids, ids[1:]):
+    for src, dst in zip(ids, ids[1:], strict=False):
         storage.add_edge(IREdge(from_node=src, to_node=dst, type=EdgeType.IMPORTS))
     return storage
 

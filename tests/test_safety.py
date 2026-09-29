@@ -156,18 +156,16 @@ class TestCancellation:
                 ctx.check()
 
     def test_cancellation_propagates_to_child(self):
-        with cancellation_scope() as parent:
-            with cancellation_scope() as child:
-                parent.cancel("propagate")
-                with pytest.raises(CancelledError):
-                    child.check()
+        with cancellation_scope() as parent, cancellation_scope() as child:
+            parent.cancel("propagate")
+            with pytest.raises(CancelledError):
+                child.check()
 
     def test_cancellation_not_propagated_to_parent(self):
-        with cancellation_scope() as parent:
-            with cancellation_scope() as child:
-                child.cancel("child-only")
-                # Parent should not be cancelled
-                parent.check()  # Should not raise
+        with cancellation_scope() as parent, cancellation_scope() as child:
+            child.cancel("child-only")
+            # Parent should not be cancelled
+            parent.check()  # Should not raise
 
     def test_timeout_scope_cancels_after_timeout(self):
         with timeout_scope(0.05, "too slow"):
