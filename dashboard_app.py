@@ -6,6 +6,7 @@ import os
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -17,18 +18,15 @@ from astra.runtime.replay_engine import ReplayEngine
 from astra.runtime.health import HealthDiagnostics
 from astra.runtime.telemetry import TelemetryEngine
 from astra.runtime.tracing import Tracer
-from astra.parser.registry import ParserRegistry
-from astra.parser.python_adapter import PythonParserAdapter
-from astra.parser.jsts_adapter import JSTSParserAdapter
-from astra.parser.markdown_adapter import MarkdownParserAdapter
+from astra.parser.registry import build_default_parser_registry
 
 app = FastAPI(title="SL-AstraCore", docs_url="/docs")
 
 # ── Runtime ────────────────────────────────────────────────────────────
-_registry = ParserRegistry()
-_registry.register(PythonParserAdapter())
-_registry.register(JSTSParserAdapter())
-_registry.register(MarkdownParserAdapter())
+# The default registry wires all 12 language adapters (Python, JS/TS, Markdown
+# plus the tree-sitter set). Hand-rolling one here silently dropped Go/Rust/Java/
+# C/C++/C#/Ruby/PHP from every index the dashboard produced.
+_registry = build_default_parser_registry()
 _orchestrator = RuntimeOrchestrator(parser_registry=_registry)
 _metrics = MetricsCollector()
 _event_bus = EventBus()
@@ -46,6 +44,30 @@ _journal = ExecutionJournal(os.path.join(_astra_home, "dashboard_journal.jsonl")
 
 def _emit(event_type: str, payload: dict, source: str = "dashboard") -> None:
     _event_bus.emit(RuntimeEvent(event_type=event_type, payload=payload, source=source))
+
+
+# ── CSRF / DNS-rebinding guard ─────────────────────────────────────────
+# Every state-changing route is reachable by a plain GET with a `path` query
+# parameter, so any page the user has open could trigger a full index of an
+# arbitrary directory (`<img src="http://localhost:8780/api/context?path=C:/">`)
+# and then write into it through /api/patch/apply. Browsers attach Origin to
+# cross-origin requests even for GET, so refusing foreign origins closes it.
+_ALLOWED_ORIGIN_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+
+
+@app.middleware("http")
+async def _reject_foreign_origins(request: Request, call_next):
+    origin = request.headers.get("origin")
+    if origin:
+        host = origin.split("//", 1)[-1].split("/", 1)[0]
+        hostname = host.rsplit(":", 1)[0] if ":" in host else host
+        if hostname.lower() not in _ALLOWED_ORIGIN_HOSTS:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "cross-origin request refused"},
+            )
+    return await call_next(request)
 
 
 def _registered_roots() -> list[str]:
@@ -73,19 +95,17 @@ def _confine_to_registered_repo(candidate: str) -> str:
 
 
 def _get_or_create(path: str):
-    """Register repo if new, index if stale."""
-    from pathlib import Path as _P
-    root = str(_P(path).resolve())
-    try:
-        rec = _orchestrator.get_repo(root)
-    except Exception:
-        rec = None
+    """Look up an already-registered repo. Never registers a new one.
+
+    Registration is an explicit POST (/api/repos/add). Auto-registering here meant
+    every read endpoint could pull an arbitrary directory into the graph — and,
+    because /api/patch/apply is confined to *registered* roots, hand the caller
+    write access to it too.
+    """
+    root = str(Path(path).resolve())
+    rec = _orchestrator.get_repo(root)
     if rec is None:
-        rec = _orchestrator.register_repo(root, backend="duckdb")
-        _metrics.increment("repos.added", tags={"name": rec.name})
-        _emit("repo_registered", {"name": rec.name})
-    # Re-index only fresh registrations; a failed repo must not trigger a
-    # synchronous full re-index on every request (death spiral).
+        raise HTTPException(status_code=404, detail=f"repository not registered: {os.path.basename(root)}")
     if rec.status.value == "registered":
         rec = _orchestrator.index_repo(root)
     return rec
@@ -153,7 +173,10 @@ async def add_repo(payload: dict):
     _emit("repo_registered", {"name": rec.name})
 
     _emit("scan_started", {"repo": rec.name, "path": rec.root_path})
-    rec = _orchestrator.index_repo(rec.root_path)
+    # Indexing is CPU/IO bound and can take minutes on a large repo. Running it
+    # inline blocked the whole event loop, stalling every other endpoint and the
+    # SSE stream for the duration.
+    rec = await run_in_threadpool(_orchestrator.index_repo, rec.root_path)
     if rec.status.value == "failed":
         raise HTTPException(status_code=500, detail=f"indexing failed: {rec.error}")
     _emit("graph_updated", {"repo": rec.name, "nodes": rec.node_count, "edges": rec.edge_count})
