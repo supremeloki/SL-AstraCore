@@ -665,9 +665,9 @@ async def event_stream(request: Request):
             while True:
                 if await request.is_disconnected():
                     break
-                events = _event_bus.log()
-                if len(events) > last_idx:
-                    for e in events[last_idx:]:
+                events, last_idx = _event_bus.log_since(last_idx)
+                if events:
+                    for e in events:
                         import json
                         yield {
                             "event": e.event_type,
@@ -678,7 +678,6 @@ async def event_stream(request: Request):
                                 "source": e.source,
                             })
                         }
-                    last_idx = len(events)
                 await asyncio.sleep(0.5)
         except asyncio.CancelledError:
             pass

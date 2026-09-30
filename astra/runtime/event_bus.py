@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Any
-from collections import defaultdict
+from collections import defaultdict, deque
 import contextlib
 
 
@@ -20,9 +20,12 @@ class RuntimeEvent:
 class EventBus:
     """Pub/sub event bus for runtime events."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_log: int = 1000) -> None:
         self._subscribers: dict[str, list[Callable[[RuntimeEvent], None]]] = defaultdict(list)
-        self._event_log: list[RuntimeEvent] = []
+        # Bounded: the SSE endpoint polls this twice a second for the life of
+        # the dashboard, so an unbounded list grew forever and every poll copied
+        # it in full.
+        self._event_log: deque[RuntimeEvent] = deque(maxlen=max_log)
 
     def subscribe(self, event_type: str, handler: Callable[[RuntimeEvent], None]) -> None:
         self._subscribers[event_type].append(handler)
@@ -38,6 +41,21 @@ class EventBus:
 
     def log(self) -> list[RuntimeEvent]:
         return list(self._event_log)
+
+    def log_since(self, index: int) -> tuple[list[RuntimeEvent], int]:
+        """Events after `index`, plus the new index.
+
+        Callers poll this, so it hands back the new cursor instead of making
+        them call len(log()). A cursor at or past the end (the log was trimmed
+        or flushed underneath it) returns the whole retained window once, so
+        the stream recovers instead of stalling.
+        """
+        events = list(self._event_log)
+        if index >= len(events):
+            if index == len(events):
+                return [], index
+            return events, len(events)
+        return events[index:], len(events)
 
     def flush(self) -> None:
         self._event_log.clear()
