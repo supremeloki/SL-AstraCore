@@ -35,8 +35,18 @@ jobs:
           pip install pytest pytest-asyncio ruff mypy types-PyYAML httpx2
           pip install -e .
 
+      # -rfE lists every failure in the summary. Without it a run that failed
+      # for a reason the reporter cannot reproduce showed nothing but the
+      # progress dots, which is how this stayed undiagnosed for several runs.
       - name: Tests
-        run: python -m pytest tests/ -q --tb=short
+        run: |
+          set +e
+          python -m pytest tests/ -q --tb=short -rfE
+          code=$?
+          echo "pytest exit code: $code"
+          # Print the summary lines even when the run passed, so a job that
+          # went red for a reason other than a test failure is visible here.
+          exit $code
         env:
           STRICT_KPI: "1"
 
