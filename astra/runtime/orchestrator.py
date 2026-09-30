@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence, Optional
 
+from astra.core.logger import get_logger
 from astra.graph.enrichment import enrich_graph
 from astra.graph.mutator import GraphMutator
 from astra.ir.models import (
@@ -27,6 +29,8 @@ from astra.runtime.models import RepoRecord, RepoStatus
 from astra.storage.backend import StorageProvider
 from astra.context.engine import ContextEngine
 
+logger = get_logger("astra.runtime.orchestrator")
+
 
 class RuntimeOrchestrator:
     """Manages repository lifecycle: register, index, refresh, query context.
@@ -42,6 +46,11 @@ class RuntimeOrchestrator:
     ) -> None:
         self._parser_registry = parser_registry or build_default_parser_registry()
         self._repos: dict[str, RepoRecord] = {}
+        # DuckDB allows one writer per file. Indexing and querying both open the
+        # same per-repo database, so a second writer would fail with an opaque
+        # "Catalog write-write conflict" and be reported as a failed repo. One
+        # lock per repo, shared by writers and readers, prevents that.
+        self._repo_locks: dict[str, threading.Lock] = {}
         astra_home = os.environ.get("ASTRA_HOME") or os.path.join(
             os.path.expanduser("~"), ".astra"
         )
@@ -95,6 +104,15 @@ class RuntimeOrchestrator:
         if record is None:
             raise ValueError(f"Repository not registered: {root_path}")
 
+        with self._lock_for(root_path):
+            return self._index_locked(record, file_extensions)
+
+    def _index_locked(
+        self,
+        record: RepoRecord,
+        file_extensions: Optional[Sequence[str]],
+    ) -> RepoRecord:
+        root_path = record.root_path
         record.status = RepoStatus.INDEXING
         record.warnings = []
 
@@ -285,12 +303,23 @@ class RuntimeOrchestrator:
 
         except Exception as exc:
             record.status = RepoStatus.FAILED
-            record.error = str(exc)
+            # str(exc) alone lost the traceback, so a DuckDB catalog conflict
+            # surfaced as a bare one-liner with no way to trace the cause.
+            record.error = f"{type(exc).__name__}: {exc}"
+            logger.exception("indexing failed for %s", root_path)
         finally:
             if storage is not None:
                 storage.close()
 
         return record
+
+    def _lock_for(self, root_path: str) -> threading.Lock:
+        lock = self._repo_locks.get(root_path)
+        if lock is None:
+            # Setdefault makes creation atomic without holding a second lock on
+            # the dict itself, which the callers of this method already hold.
+            lock = self._repo_locks.setdefault(root_path, threading.Lock())
+        return lock
 
     def refresh_repo(self, root_path: str) -> RepoRecord:
         """Full re-index of a registered repository. Idempotent."""
@@ -308,26 +337,34 @@ class RuntimeOrchestrator:
         With no explicit seeds, the task-aware pipeline (task analysis ->
         strategy -> ranking -> token budget) selects seeds from the query.
         """
-        record = self._get_active_record(root_path)
+        record = self._get_record(root_path)
 
-        storage = StorageProvider(
-            backend=record.storage_backend,
-            db_path=record.db_path,
-        ).create()
-        storage.connect()
-
-        try:
-            if seed_node_ids:
-                engine = ContextEngine(storage)
-                return engine.generate_context_pack(
-                    query_intent=query_intent,
-                    seed_nodes=list(seed_node_ids),
-                    max_tokens=max_tokens,
+        with self._lock_for(root_path):
+            # Re-read the status now that the writer has released: a query that
+            # arrived mid-index used to fail outright instead of reading the
+            # graph the index just wrote.
+            if record.status != RepoStatus.ACTIVE:
+                raise RuntimeError(
+                    f"Repository not active: {root_path} (status={record.status.value})"
                 )
+            storage = StorageProvider(
+                backend=record.storage_backend,
+                db_path=record.db_path,
+            ).create()
+            storage.connect()
 
-            return self._build_task_context_pack(record, storage, query_intent, max_tokens)
-        finally:
-            storage.close()
+            try:
+                if seed_node_ids:
+                    engine = ContextEngine(storage)
+                    return engine.generate_context_pack(
+                        query_intent=query_intent,
+                        seed_nodes=list(seed_node_ids),
+                        max_tokens=max_tokens,
+                    )
+
+                return self._build_task_context_pack(record, storage, query_intent, max_tokens)
+            finally:
+                storage.close()
 
     def _build_task_context_pack(
         self,
@@ -534,6 +571,12 @@ class RuntimeOrchestrator:
         except OSError:
             return []
         return rules
+
+    def _get_record(self, root_path: str) -> RepoRecord:
+        record = self._repos.get(root_path)
+        if record is None:
+            raise ValueError(f"Repository not registered: {root_path}")
+        return record
 
     def _get_active_record(self, root_path: str) -> RepoRecord:
         record = self._repos.get(root_path)
