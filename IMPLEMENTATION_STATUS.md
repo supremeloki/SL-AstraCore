@@ -1,48 +1,63 @@
-# SL-AstraCore Implementation Status
+# SL-AstraCore implementation status
 
-Updated: 2026-08-25. Replaces the 2026-07-07 audit, which no longer matched
-the tree (it predated the storage backends, parser adapters, FastAPI dashboard
-and runtime module stack). Scores below come from `.audit_findings.json`.
+Measured 2026-09-30. Every number here is reproducible; nothing is carried
+over from an earlier audit.
 
-## Summary
+## What it is
 
-The pipeline is executable end to end:
+A local tool that reads one repository, turns it into a graph in DuckDB, and
+answers a plain-language question by returning a ranked bundle of real source.
+A FastAPI dashboard shows the graph and the answer; `astra` does the same from
+a terminal.
 
-`RepositoryScanner -> ParserRegistry -> import_resolver -> DuckDB/SQLite storage -> context stack -> RuntimeOrchestrator -> FastAPI dashboard (SSE)`
+```
+RepositoryScanner -> ParserRegistry -> import_resolver -> DuckDB -> context stack -> dashboard / CLI
+```
 
-Baseline: `python -m pytest tests/ -q` => 265 passed, 1 skipped.
+## Measured
 
-## Audit scores by dimension
+On this repository, 140 files:
 
-| Dimension | Score |
-|---|---:|
-| End-to-end runtime behavior | 74% |
-| Spec completeness vs docs/sas/*.md | 61% |
-| Bugs and correctness defects | 55% |
-| Architecture and code-quality debt | 55% |
-| Performance bottlenecks | 52% |
-| Security review of exposed surfaces | 38% |
-| Docs, config, packaging, repo hygiene | 42% |
+| | |
+|---|---|
+| index | 1.9s (85 files/s) |
+| index, 3,000 files | 11s (266 files/s) |
+| query | 67ms median |
+| ranking accuracy, 12 real questions | 11/12 first place, 12/12 top three |
+| pack carrying source, 4k budget | 9 of 13 nodes |
+| source per 8x budget | 7.9x |
 
-## Phase status
+| Gate | |
+|---|---|
+| `pytest tests/ -q` | 257 passed, 1 skipped |
+| `ruff check astra/ tests/ dashboard_app.py` | clean |
+| `mypy astra/ dashboard_app.py` | clean, 95 files |
+| Linux + Windows, Python 3.11 and 3.12 | CI |
 
-| Phase | Component | State |
-|---|---|---|
-| 1 | Repository Scanner | Strongest phase: streaming scan, JSONL export, hash checkpoint resume, persistent index storage |
-| 2 | Universal Parser | Python strong; JS/TS regex-based with known import-regex gaps; Markdown/config partial; tree-sitter engine exists but unwired; other languages fall back to text blocks |
-| 3 | Knowledge Graph | Persistent DuckDB/SQLite backends + mutator diffing work; enrichers (vault/conflict/pattern) built and tested but not wired into the pipeline; shortest_path/subgraph queries protocol-only |
-| 4 | Context Engine | Packs generate and rank; token budget not enforced on all paths; snippets/vault_context fields never populated |
-| 5 | Runtime Orchestrator | Index/query lifecycle works; ToolRegistry/ValidationEngine/RecoveryEngine protocols have no implementations; plan step states never transition |
-| 6 | Dashboard + Control Plane | Full FastAPI app with SSE streaming serves the SPA; replay engine/journal implemented but unreached; several typed events never emitted; metrics collector unfed |
-| 7 | Agent Adapter Layer | Skeleton: providers echo/static stubs, output schema declared but unvalidated, no fallback chain |
+## Deliberate limitations
 
-## Known top issues (from audit)
+- **No agent layer.** Nothing calls an LLM, applies a patch, or validates a
+  result. The dashboard can compute a semantic diff and a risk score for a
+  proposed edit; closing the loop is the caller's job.
+- **A re-index re-reads every file.** Edges come from pairs of files, so
+  skipping unchanged ones leaves stale edges pointing at them. Tried; it was
+  silently wrong; reverted.
+- **Single-user access control.** A per-process token, not accounts. It binds
+  all interfaces, so do not expose it beyond a trusted network. Set
+  `ASTRA_TOKEN` to pin the token; there is no TLS.
+- **Config files are not parsed.** `.json` / `.yaml` / `.toml` are indexed as
+  files with no structural detail.
+- **Tree-sitter needs a cache directory.** With neither `HOME` nor
+  `XDG_CACHE_HOME`, grammars cannot be downloaded and non-Python parsing is
+  skipped rather than failing.
+- **BLIND_MAX depth.** Source nested past ~900 levels is skipped.
 
-1. Security: `/api/patch/apply` allows arbitrary file write via absolute/traversal paths; `/api/patch/diff` arbitrary read; `/api/repos/add` indexes any directory. No auth on any endpoint.
-2. Correctness: relative imports resolve to wrong files; JS/TS relative imports never resolve; async functions invisible to the parser.
-3. Architecture: ~20 of 34 runtime modules are tests-only dead weight in four parallel stacks; three conflicting ExecutionPlan classes; two unrelated ContextEngine classes.
-4. Performance: index_repo persists row-by-row (~53x slower than the existing batch API); resolver rebuilds a set per dependency.
+## Removed
 
-## Change log
+Modules with no caller outside their own tests were deleted (46 modules,
+~2,800 lines). The `backup/dead-code` branch holds the state before the
+removal. Kept: `astra/cli` (the console script), `astra/patch/analyzer`
+(reachable from `dashboard_app.py`), `astra/core/config.py`.
 
-- 2026-08-25: Packaging/docs repair — requirements.txt now matches real imports (added psutil, sse-starlette; dropped unused toml/python-dotenv/websockets/rich/click), pyproject [project] dependencies/classifiers/[project.scripts] added, stdlib argparse CLI (`astra index|context|serve`) implemented, README created, this file regenerated from `.audit_findings.json`.
+If something in that set is wanted again, restore the branch rather than
+rewriting it.
