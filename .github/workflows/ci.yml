@@ -39,13 +39,17 @@ jobs:
       # for a reason the reporter cannot reproduce showed nothing but the
       # progress dots, which is how this stayed undiagnosed for several runs.
       - name: Tests
+        # bash, because PIPESTATUS is how pytest's exit code survives being
+        # piped through tee. The default shell is pwsh on Windows runners,
+        # where the pipeline reports tee's code instead and a failed run looks
+        # green — which is exactly the state this workflow was in.
+        shell: bash
         run: |
           set +e
-          python -m pytest tests/ -q --tb=short -rfE
-          code=$?
+          python -m pytest tests/ -q --tb=short -rfE 2>&1 | tee tests-output.txt
+          # PIPESTATUS[0] is pytest's own code, not tee's.
+          code=${PIPESTATUS[0]}
           echo "pytest exit code: $code"
-          # Print the summary lines even when the run passed, so a job that
-          # went red for a reason other than a test failure is visible here.
           exit $code
         env:
           STRICT_KPI: "1"
@@ -58,6 +62,11 @@ jobs:
 
       # The job-log endpoint returns 401 for every token available to the person
       # fixing this, so a red build was undiagnosable. An issue is readable.
+      #
+      # This publishes what the failing step actually printed. It used to re-run
+      # the suite itself, which meant the issue showed a green run whenever the
+      # real failure depended on the step's environment — several Windows
+      # failures were reported as "282 passed" this way.
       - name: Report failure
         if: failure()
         shell: bash
@@ -68,21 +77,27 @@ jobs:
           PY_VERSION: ${{ matrix.python-version }}
         run: |
           set +e
-          # gh ships with the hosted runners but not with self-hosted ones;
-          # the artifact below carries the same text either way.
-          command -v gh >/dev/null 2>&1 || echo "note: gh is not installed, skipping the issue" >&2
-          python -m pytest tests/ -q --tb=long -rfE > failure.txt 2>&1
-          python -m ruff check astra/ tests/ dashboard_app.py >> failure.txt 2>&1
-          python -m mypy astra/ dashboard_app.py --python-version "$PY_VERSION" >> failure.txt 2>&1
           {
             echo "### $OS_NAME / Python $PY_VERSION @ ${{ github.sha }}"
             echo
             echo '```'
-            tail -c 50000 failure.txt
+            if [ -f tests-output.txt ]; then
+              tail -c 50000 tests-output.txt
+            else
+              echo "(the Tests step wrote no output)"
+            fi
+            echo '```'
+            echo
+            echo "Linting and types, run separately:"
+            echo '```'
+            python -m ruff check astra/ tests/ dashboard_app.py 2>&1 | tail -40
+            python -m mypy astra/ dashboard_app.py --python-version "$PY_VERSION" 2>&1 | tail -40
             echo '```'
           } > body.md
           if command -v gh >/dev/null 2>&1; then
             gh issue create --title "CI failure: $OS_NAME / Python $PY_VERSION @ ${{ github.sha }}" --body-file body.md || true
+          else
+            cat body.md
           fi
 
       - name: Keep the failure text
@@ -90,5 +105,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ci-failure-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: failure.txt
+          path: tests-output.txt
           if-no-files-found: ignore
