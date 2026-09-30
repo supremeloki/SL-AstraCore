@@ -62,17 +62,14 @@ class TestTimestamps:
         e = RuntimeEvent(event_type="t", payload=None)
         assert e.timestamp.tzinfo is not None
 
-    def test_control_plane_emits_typed_events(self):
-        from astra.dashboard.control_plane import DashboardControlPlane
-
+    def test_the_event_bus_carries_a_scan_start(self):
+        """DashboardControlPlane is gone; the bus it published to is not."""
         bus = EventBus()
         received = []
         bus.subscribe("SCAN_STARTED", lambda ev: received.append(ev))
-        cp = DashboardControlPlane(event_bus=bus)
-        cp.emit_scan_started({"repo": "r"})
+        bus.emit(RuntimeEvent(event_type="SCAN_STARTED", payload={"repo": "r"}))
         assert len(received) == 1
         assert received[0].event_type == "SCAN_STARTED"
-        # SCAN_PROGRESS is emitted by build(), not by emit_scan_started.
         assert not any(ev.event_type == "SCAN_PROGRESS" for ev in bus.log())
 
 

@@ -120,21 +120,27 @@ RepositoryScanner → ParserRegistry → ImportResolver → DuckDB/SQLite
 | `astra/storage` | DuckDB/SQLite backends, set-based upserts |
 | `astra/context` | task analysis, ranking, token budgeting |
 | `astra/runtime` | orchestrator, metrics/events/journal, resilience modules |
-| `astra/agents` | provider registry: generic / codex / manual |
+| `astra/patch` | semantic diff and risk scoring for a proposed edit |
 
 ## Quality
 
 ```bash
-python -m pytest tests/ -q                      # 370 passed, 1 skipped
-python -m mypy astra/ dashboard_app.py          # Success: no issues in 150 files
-python -m ruff check astra/ tests/              # All checks passed
+python -m pytest tests/ -q                      # 252 passed, 1 skipped
+python -m mypy astra/ dashboard_app.py          # Success: no issues in 95 files
+python -m ruff check astra/ tests/ dashboard_app.py   # All checks passed
 ```
 
-The codebase is type-clean under mypy (0 errors) and lint-clean under a
-project-owned ruff ruleset, with CI running both on Python 3.11 and 3.12 across
-Linux and Windows. It was audited across eight dimensions (runtime behaviour,
-spec completeness, correctness, architecture, performance, security, packaging,
-hygiene); the findings that mattered were fixed, and the rest are noted below.
+The codebase is type-clean under mypy (0 errors over 95 files) and lint-clean
+under a project-owned ruff ruleset, with CI running both on Python 3.11 and 3.12
+across Linux and Windows. Measured on this repository, `python .bench.py`
+reproduces every number below:
+
+| | |
+|---|---|
+| index 3,000 files | 11s (266 files/s) |
+| query | 67ms median |
+| ranking accuracy, 12 real questions | 11/12 first place, 12/12 top three |
+| pack carrying source at a 4k budget | 9 of 13 nodes |
 
 ### Known limitations
 
@@ -145,10 +151,13 @@ Deliberate, not accidental:
   the server binds all interfaces so it is reachable from other machines on the
   network. Set `ASTRA_TOKEN` to pin the token; there is no TLS, so do not expose
   it beyond a trusted network.
-- **Phase 5/7 are opt-in.** `ToolRegistry` / `ValidationEngine` /
-  `RecoveryEngine` are declared protocols with no implementation, and the
-  agent providers are reachable from the library and CLI rather than wired into
-  the dashboard. Use them directly or wire them up.
+- **No agent integration.** There is no agent layer: nothing calls an LLM,
+  applies a patch, or validates a result. The dashboard shows what the index
+  found and can compute a semantic diff for a proposed edit, but closing the
+  loop is the caller's job.
+- **A re-index re-reads every file.** Edges are derived from pairs of files, so
+  skipping unchanged ones would leave stale edges pointing at them; correctness
+  won over the time saving.
 - **Config files are not parsed.** `.json` / `.yaml` / `.toml` are indexed as
   files with no structural detail.
 - **BLIND_MAX depth.** Source nested deeper than ~900 levels (minified

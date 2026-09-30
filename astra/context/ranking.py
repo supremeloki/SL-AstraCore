@@ -1,4 +1,4 @@
-from astra.context.stemming import stem, stem_set
+from astra.context.stemming import name_stems, stem, stem_set
 from astra.core.logger import get_logger
 from astra.models.graph_node import NodeType
 from astra.models.task_analysis import TaskType
@@ -48,6 +48,7 @@ class Ranking:
         else:
             self._document_frequency = self._compute_document_frequency()
             self._files_indexed = self._count_files()
+        self._exact_symbol_names: frozenset = frozenset()
 
     def _count_files(self) -> int:
         return sum(
@@ -155,13 +156,33 @@ class Ranking:
             # query: given "what resolves imports", the answer is
             # import_resolver.py, not whichever helper happens to be called
             # find_imports.
-            score += 2.0
+            #
+            # A file whose own name answers the question gets a much larger
+            # bonus. orchestrator.py contains "nodes", "ranked" and "relevance"
+            # somewhere in 600 lines; ranking.py is the module about ranking.
+            # One matching word is enough, because a name is a label for the
+            # whole file and the other question words are what it is for.
+            # Withdrawn when a symbol is named exactly the question: asked for
+            # resolve_imports_into_edges, that function is the answer and the
+            # file containing it is not.
+            if self._symbol_answers_exactly(terms):
+                score += 1.5
+            else:
+                score += 9.0 if self._name_answers(node, terms) else 1.5
         elif node_type == NodeType.CLASS:
             score += 0.7
         elif node_type == NodeType.FUNCTION:
+            # A private helper inherits the vocabulary of the file it lives in,
+            # so every method of ranking.py matched the question "how does
+            # ranking work" and thirteen of them filled the pack. Their own name
+            # has to earn the place, not their file's.
             score += 0.6
         elif node_type == NodeType.VAULT_CONCEPT:
             score += 0.4
+        if node_type in (NodeType.FUNCTION, NodeType.CLASS) and terms:
+            own = name_stems((node.label or "").replace(".py", ""))
+            if not (stem_set(terms) & own):
+                score *= 0.3
         if node_type in _ANALYTIC_TYPES:
             # The type bonus is what source gets for being source; an analytic
             # label gets none of it.
@@ -248,7 +269,7 @@ class Ranking:
             return 0.0
         total = sum(1.0 + min(len(t), 12) / 12.0 for t in wanted)
 
-        source_terms = Ranking._source_terms_of(node)
+        source_terms = self._source_terms_of(node)
         if source_terms:
             # Coverage of the query, not raw hit count: a 600-line module has
             # more distinct words than a 40-line one, so counting hits made the
@@ -293,7 +314,47 @@ class Ranking:
         return hits / total
 
     @staticmethod
-    def _source_terms_of(node) -> set:
+    @staticmethod
+    def _name_answers(node, terms) -> bool:
+        """Does the file's own name answer the question?
+
+        "how are nodes ranked by relevance" -> ranking.py: the name carries
+        "rank" and the other two words are what ranking is for. Requiring the
+        whole question would exclude it, and a file that merely contains the
+        words somewhere in its body would win instead.
+        """
+        if not terms:
+            return False
+        wanted = stem_set(terms)
+        if not wanted:
+            return False
+        name_terms = name_stems((node.label or "").replace(".py", ""))
+        return bool(wanted & name_terms)
+
+    def _compute_exact_symbol_names(self, terms) -> frozenset:
+        """Stem sets that some symbol is named exactly. Computed once per rank."""
+        if not terms:
+            return frozenset()
+        wanted = stem_set(terms)
+        if not wanted:
+            return frozenset()
+        for other in self._kg.node_index.values():
+            if other.node_type in (NodeType.FUNCTION, NodeType.CLASS) and name_stems(
+                other.label or ""
+            ) == wanted:
+                return frozenset({frozenset(wanted)})
+        return frozenset()
+
+    def _symbol_answers_exactly(self, terms) -> bool:
+        """Is some symbol's own name exactly the question's words?
+
+        Checked across the graph, once per rank, so this is a set membership
+        test rather than a scan per node.
+        """
+        wanted = stem_set(terms) if terms else set()
+        return bool(wanted) and frozenset(wanted) in self._exact_symbol_names
+
+    def _source_terms_of(self, node) -> set:
         path = str(node.metadata.get("file_path", "") or node.properties.get("file_path", ""))
         if not path or node.node_type != NodeType.FILE:
             return set()
@@ -311,6 +372,7 @@ class Ranking:
         return terms
 
     def rank(self, node_ids, task_analysis=None, terms=None):
+        self._exact_symbol_names = self._compute_exact_symbol_names(terms)
         scored = [(nid, self.score(nid, task_analysis, terms)) for nid in node_ids]
         scored.sort(key=lambda kv: kv[1], reverse=True)
         return scored

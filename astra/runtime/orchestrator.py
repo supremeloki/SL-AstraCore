@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence, Optional
@@ -33,6 +34,11 @@ from astra.context.engine import ContextEngine
 logger = get_logger("astra.runtime.orchestrator")
 
 
+def _read_text(path: str) -> str:
+    """Module level so the thread pool does not capture `self` per task."""
+    return Path(path).read_text(encoding="utf-8", errors="replace")
+
+
 class RuntimeOrchestrator:
     """Manages repository lifecycle: register, index, refresh, query context.
 
@@ -53,6 +59,7 @@ class RuntimeOrchestrator:
         # lock per repo, shared by writers and readers, prevents that.
         self._repo_locks: dict[str, threading.Lock] = {}
         self._document_frequency: dict[str, tuple] = {}
+        self._graph_cache: dict[str, tuple] = {}
         astra_home = os.environ.get("ASTRA_HOME") or os.path.join(
             os.path.expanduser("~"), ".astra"
         )
@@ -120,8 +127,10 @@ class RuntimeOrchestrator:
         root_path = record.root_path
         record.status = RepoStatus.INDEXING
         record.warnings = []
-        # The file set is about to change, so cached term counts are stale.
+        # The file set is about to change, so the cached term counts and the
+        # cached graph are both stale.
         self._document_frequency.pop(record.root_path, None)
+        self._graph_cache.pop(record.root_path, None)
 
         if not Path(root_path).exists():
             record.status = RepoStatus.FAILED
@@ -133,17 +142,40 @@ class RuntimeOrchestrator:
             # 1. Scan repo
             files = self._scan_repo_files(root_path, file_extensions)
 
+            # A full re-index, deliberately. Edges are derived from pairs of
+            # files, so re-parsing only the changed ones cannot rebuild the
+            # edges that point at them: deleting an import from a.py and
+            # re-indexing left a.py -> b.py in the graph, because b.py was never
+            # re-parsed and the pair is only recomputed when both are. Skipping
+            # unchanged files looked like a cheap win and was silently wrong.
+            files = self._scan_repo_files(root_path, file_extensions)
+
             # 2. Parse all files. A file that fails to read (sharing violation from
             # an editor/AV/git, transient IO) is NOT the same as a deleted file —
             # it must keep its existing graph nodes so a later index can recover.
+            #
+            # Read in a thread pool: the cost is opening the file, and on
+            # Windows an antivirus filter puts that on a syscall that releases
+            # the GIL, so threads overlap it. Parsing stays single-threaded —
+            # the Python AST is the CPU-bound half and threads would only add
+            # contention around the interpreter's own lock.
+            contents: dict[str, str | None] = {}
+            with ThreadPoolExecutor(max_workers=16) as pool:
+                futures = {pool.submit(_read_text, f): f for f in files}
+                for future in as_completed(futures):
+                    file_path = futures[future]
+                    try:
+                        contents[file_path] = future.result()
+                    except OSError as exc:
+                        contents[file_path] = None
+                        record.warnings.append(f"unreadable: {file_path} ({exc})")
+
             parse_results = []
             unreadable_files: list[str] = []
             for file_path in files:
-                try:
-                    content = Path(file_path).read_text(encoding="utf-8", errors="replace")
-                except OSError as exc:
+                content = contents.get(file_path)
+                if content is None:
                     unreadable_files.append(file_path)
-                    record.warnings.append(f"unreadable: {file_path} ({exc})")
                     continue
                 try:
                     result = self._parser_registry.parse(file_path, content)
@@ -253,11 +285,12 @@ class RuntimeOrchestrator:
                 for node in symbol_nodes
             )
 
-            # 6. Drop nodes for files actually removed since last index (cascades
-            # edges), then persist everything in one atomic batch. Files that merely
-            # failed to read this run are excluded from the delete set — along with
-            # every node that hangs off them (symbol nodes, enrichment nodes) — so a
-            # transient lock cannot silently destroy a file's subgraph.
+            # 6. Drop nodes for files removed since the last index, cascades
+            # edges, then persist everything in one atomic batch. Only a file
+            # that could not be read this run is preserved: a file that was
+            # read is fully described by nodes_to_upsert, so anything left over
+            # from its previous shape — a symbol at an old line number, an
+            # import that was deleted — has to go.
             fresh_ids = {n.id for n in nodes_to_upsert}
             existing_ids = storage.get_node_ids()
             preserved_file_ids = {f"file:{path}" for path in unreadable_files}
@@ -302,7 +335,7 @@ class RuntimeOrchestrator:
             )
 
             # 7. Update record
-            record.file_count = len(parse_results) + len(unreadable_files)
+            record.file_count = len(files)
             record.node_count = storage.node_count()
             record.edge_count = storage.edge_count()
             record.last_indexed = datetime.now(timezone.utc).isoformat()
@@ -385,25 +418,35 @@ class RuntimeOrchestrator:
         from astra.models.knowledge_graph import KnowledgeGraph
         from astra.context.context_engine import ContextEngine as TaskContextEngine
 
-        kg = KnowledgeGraph()
-        for n in storage.get_all_nodes():
-            props = dict(n.metadata or {})
-            file_path = getattr(n, "file_path", "") or props.get("file_path", "")
-            if n.type == NodeType.FILE and not file_path:
-                file_path = n.id.removeprefix("file:")
-            if file_path:
-                props["file_path"] = file_path
-            gn = GraphNodeModel(
-                id=n.id,
-                label=n.name or n.id,
-                node_type=node_type_from_ir(n.type),
-                confidence=n.confidence,
-                properties=props,
-            )
-            kg.nodes.append(gn)
-            kg.node_index[gn.id] = gn
-        for e in storage.get_all_edges():
-            kg.edges.append(e)
+        # Reuse the graph between queries. Rebuilding it meant a fresh DuckDB
+        # connection plus a full row-to-node conversion on every question: 141ms
+        # of the 180ms query, and 2.1s for the first one. It is invalidated by
+        # node_count, so an index in between is picked up.
+        cached = self._graph_cache.get(record.root_path)
+        node_count = storage.node_count()
+        if cached is not None and cached[0] == node_count:
+            kg = cached[1]
+        else:
+            kg = KnowledgeGraph()
+            for n in storage.get_all_nodes():
+                props = dict(n.metadata or {})
+                file_path = getattr(n, "file_path", "") or props.get("file_path", "")
+                if n.type == NodeType.FILE and not file_path:
+                    file_path = n.id.removeprefix("file:")
+                if file_path:
+                    props["file_path"] = file_path
+                gn = GraphNodeModel(
+                    id=n.id,
+                    label=n.name or n.id,
+                    node_type=node_type_from_ir(n.type),
+                    confidence=n.confidence,
+                    properties=props,
+                )
+                kg.nodes.append(gn)
+                kg.node_index[gn.id] = gn
+            for e in storage.get_all_edges():
+                kg.edges.append(e)
+            self._graph_cache[record.root_path] = (node_count, kg)
 
         # Reuse the term counts: the graph is rebuilt every query, but the file
         # set it describes has not changed since the last index.

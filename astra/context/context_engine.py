@@ -40,7 +40,23 @@ class ContextEngine:
 
         self._lifecycle.advance("parsing")
         strategy = self._strategy_engine.get_strategy(task_analysis.task_type)()
-        logger.info("Strategy: %s (max_nodes=%d)", task_analysis.task_type.value, strategy["max_nodes"])
+        # The strategy's max_nodes is a per-task-type opinion sized for a default
+        # budget. A caller who asks for 32k tokens should get more than 25 nodes,
+        # and one who asks for 2k should get fewer — otherwise the budget is a
+        # number the pack reports but never uses.
+        budget = self._token_budget.budget if self._token_budget else 0
+        if budget:
+            # ~250 tokens a node: a file's head plus a function body. Below that
+            # the per-node snippet is cut to nothing and the pack is mostly
+            # names, which is the 26%-of-nodes-carry-source shape this replaced.
+            strategy = dict(strategy)
+            strategy["max_nodes"] = max(12, min(120, budget // 300))
+        logger.info(
+            "Strategy: %s (max_nodes=%d, budget=%d)",
+            task_analysis.task_type.value,
+            strategy["max_nodes"],
+            budget,
+        )
 
         self._lifecycle.advance("semantic_tagging")
         pack, deps, risks = self._selector.select(task_analysis, strategy)

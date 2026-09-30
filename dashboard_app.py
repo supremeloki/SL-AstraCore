@@ -511,14 +511,13 @@ async def patch_analyze(payload: Optional[dict] = None):
 
         new_content = content.replace(old_text, new_text, 1) if old_text else content
         try:
-            report = score_risk(diff_ast(content, new_content))
+            # Parsed once here. It was parsed again further down to compute the
+            # risk score, so the first result was thrown away and every analyze
+            # cost two parses of both revisions.
+            ast_diff = diff_ast(content, new_content)
         except SyntaxError:
             return {"status": "error", "message": "Invalid Python syntax in patch"}
-        added, removed, modified = (
-            report.ast_diff.added,
-            report.ast_diff.removed,
-            report.ast_diff.modified,
-        )
+        added, removed, modified = ast_diff.added, ast_diff.removed, ast_diff.modified
 
         # Load graph for dependency impact
         from astra.storage.backend import StorageProvider
@@ -543,7 +542,7 @@ async def patch_analyze(payload: Optional[dict] = None):
                 storage.close()
 
         # Risk scoring
-        report = score_risk(diff_ast(content, new_content), downstream=dep_impact["downstream"])
+        report = score_risk(ast_diff, downstream=dep_impact["downstream"])
 
         # Semantic diff output
         diff_lines = []

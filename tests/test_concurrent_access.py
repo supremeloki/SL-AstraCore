@@ -53,21 +53,27 @@ def test_the_lock_is_actually_held_during_an_index(tmp_path):
     observed: list[bool] = []
     lock = orchestrator._lock_for(str(tmp_path))
 
-    original = orchestrator._scan_repo_files
+    original = orchestrator._parser_registry.parse
 
-    def watch(*args, **kwargs):
+    def watch(file_path, content):
         # Mid-index: a second thread asking for the same lock must block.
-        acquired = threading.Thread(target=lambda: observed.append(lock.acquire(blocking=False)))
-        acquired.start()
-        acquired.join(timeout=5)
-        if observed and observed[-1]:
-            lock.release()
-        return original(*args, **kwargs)
+        if not observed:
+            acquired = threading.Thread(
+                target=lambda: observed.append(lock.acquire(blocking=False))
+            )
+            acquired.start()
+            acquired.join(timeout=5)
+            if observed and observed[-1]:
+                lock.release()
+        return original(file_path, content)
 
-    orchestrator._scan_repo_files = watch
+    orchestrator._parser_registry.parse = watch
     orchestrator.index_repo(str(tmp_path))
 
-    assert observed == [False], "the index did not hold the lock; a second writer could race in"
+    assert observed, "no file was parsed, so the lock was never observed"
+    assert all(value is False for value in observed), (
+        f"the index did not hold the lock; a second writer could race in: {observed}"
+    )
 
 
 def test_two_concurrent_indexes_both_succeed(tmp_path):
