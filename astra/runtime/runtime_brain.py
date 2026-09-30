@@ -196,7 +196,7 @@ class RuntimeBrain:
             "vault_concepts": concepts,
         }
 
-    def _compose_answer(self, question, pack, task_analysis):
+    def _compose_answer(self, _question, pack, task_analysis):
         top_nodes = ", ".join(n["label"] for n in pack.relevant_nodes[:5])
         parts = [
             f"Task type: {task_analysis.task_type.value}.",

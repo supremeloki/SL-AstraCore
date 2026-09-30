@@ -91,7 +91,8 @@ class TestReplayRoundTrip:
                 "new_text": "value = 2",
             })
             assert applied.json()["status"] == "applied"
-            assert open(src).read() == "value = 2\n"
+            with open(src, encoding="utf-8") as f:
+                assert f.read() == "value = 2\n"
 
             entries = client.get("/api/executions/journal").json()
             patch_entries = [e for e in entries if e["type"] == "patch_apply"]

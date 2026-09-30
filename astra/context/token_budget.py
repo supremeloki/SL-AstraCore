@@ -27,7 +27,7 @@ class TokenBudget:
     def estimate(text):
         return max(1, len(text) // AVG_CHARS_PER_TOKEN)
 
-    def reserve(self, node_id, text, force=False):
+    def reserve(self, _node_id, text, force=False):
         tokens = self.estimate(text)
         if not force and self._used + tokens > self._max:
             return False

@@ -1,6 +1,7 @@
 """Streaming execution events for runtime observability."""
 from __future__ import annotations
 
+import contextlib
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -47,10 +48,8 @@ class EventStream:
     def emit(self, event: ExecutionEvent) -> None:
         self._history.append(event)
         for cb in self._subscribers:
-            try:
-                cb(event)
-            except Exception:
-                pass  # subscriber errors must not break the pipeline
+            with contextlib.suppress(Exception):
+                cb(event)  # subscriber errors must not break the pipeline
 
     def history(self, event_type: Optional[ExecutionEventType] = None) -> list[ExecutionEvent]:
         if event_type:

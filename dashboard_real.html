@@ -406,7 +406,7 @@ select:focus,input:focus{outline:none;border-color:var(--gold)}
     <select id="repoSelect"><option value="">No repositories yet</option></select>
   </div>
   <div class="topbar-spacer"></div>
-  <button class="btn btn-primary" onclick="mAdd.classList.add('open')">
+  <button class="btn btn-primary" onclick="openAddModal()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     Add repository
   </button>
@@ -433,7 +433,7 @@ select:focus,input:focus{outline:none;border-color:var(--gold)}
       </span>
     </div>
     <div class="chart-wrap">
-      <canvas id="gCanvas"></canvas>
+      <canvas id="gCanvas" tabindex="0" role="img" aria-label="Knowledge graph star chart. Use arrow keys to pan, plus and minus to zoom, Tab to reach a star and Enter to inspect it."></canvas>
       <div class="chart-hud" id="chartHud"></div>
       <div class="chart-legend" id="graphLegend"></div>
       <div class="chart-zoom">
@@ -500,11 +500,11 @@ select:focus,input:focus{outline:none;border-color:var(--gold)}
 </div>
 </div>
 
-<div class="modal" id="mAdd">
+<div class="modal" id="mAdd" role="dialog" aria-modal="true" aria-labelledby="mAddTitle">
   <div class="modal-box">
     <div class="modal-hd">
-      <span class="modal-title">Add repository</span>
-      <button class="act-btn" onclick="mAdd.classList.remove('open')" aria-label="Close">
+      <span class="modal-title" id="mAddTitle">Add repository</span>
+      <button class="act-btn" onclick="closeAddModal()" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
@@ -514,7 +514,7 @@ select:focus,input:focus{outline:none;border-color:var(--gold)}
       <div class="form-hint">The folder is registered and indexed in place.</div>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="mAdd.classList.remove('open')">Cancel</button>
+      <button class="btn btn-ghost" onclick="closeAddModal()">Cancel</button>
       <button class="btn btn-primary" onclick="addRepo()">Index &amp; open</button>
     </div>
   </div>
@@ -661,7 +661,9 @@ function buildTree(n, depth){
   const glyph = dir
     ? '<svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
     : '<svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-  let html = `<div class="${cls}" style="padding-left:${.35+depth*.85}rem" data-path="${esc(path)}" data-dir="${dir?1:0}" title="${esc(path)}">${glyph}<span>${esc(n.name)}</span></div>`;
+  // tabindex/role make the tree keyboard-navigable; it was divs only, so the
+  // whole Explorer was unreachable without a mouse.
+  let html = `<div class="${cls}" style="padding-left:${.35+depth*.85}rem" data-path="${esc(path)}" data-dir="${dir?1:0}" title="${esc(path)}" tabindex="0" role="treeitem" aria-label="${esc(n.name)}">${glyph}<span>${esc(n.name)}</span></div>`;
   if(kids.length){
     const shown = kids.slice(0,80).map(c=>buildTree(c,depth+1)).join('');
     const more = kids.length>80 ? `<div class="tree-item" style="padding-left:${.35+(depth+1)*.85}rem;color:var(--mute)">…${kids.length-80} more</div>` : '';
@@ -672,6 +674,20 @@ function buildTree(n, depth){
 document.addEventListener('click', e=>{
   const item = e.target.closest('.tree-item');
   if(item && item.dataset.path) clickTreeItem(item.dataset.path, item.dataset.dir==='1');
+});
+document.addEventListener('keydown', e=>{
+  const item = e.target.closest?.('.tree-item');
+  if(!item || !item.dataset.path) return;
+  if(e.key === 'Enter' || e.key === ' '){
+    e.preventDefault();
+    clickTreeItem(item.dataset.path, item.dataset.dir==='1');
+    return;
+  }
+  if(e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  const items = [...document.querySelectorAll('.tree-item[tabindex]')];
+  const idx = items.indexOf(item);
+  items[idx + (e.key === 'ArrowDown' ? 1 : -1)]?.focus();
 });
 function clickTreeItem(path, isDir){
   if(isDir) return;
@@ -844,19 +860,65 @@ function drawGraph(){
   c.restore();
 }
 function setupCanvas(){
-  gCanvas.addEventListener('mousedown',e=>{ if(e.button===0){ dragging=true; mx0=e.clientX; my0=e.clientY; gCanvas.classList.add('dragging'); } });
-  window.addEventListener('mousemove',e=>{
-    if(dragging){ gVx+=e.clientX-mx0; gVy+=e.clientY-my0; mx0=e.clientX; my0=e.clientY; drawGraph(); }
+  // Pointer events cover mouse, pen and touch with one code path. The chart was
+  // mouse-only, so it could not be panned or pinched on a tablet.
+  let pinchDist = 0;
+  gCanvas.addEventListener('pointerdown', e=>{
+    if(e.button !== 0 && e.pointerType === 'mouse') return;
+    dragging = true; mx0 = e.clientX; my0 = e.clientY;
+    gCanvas.classList.add('dragging');
+    gCanvas.setPointerCapture?.(e.pointerId);
   });
-  window.addEventListener('mouseup',()=>{ dragging=false; gCanvas.classList.remove('dragging'); });
-  gCanvas.addEventListener('mousemove',e=>{
-    if(dragging) return;
+  gCanvas.addEventListener('pointermove', e=>{
+    if(dragging){
+      gVx += e.clientX-mx0; gVy += e.clientY-my0; mx0 = e.clientX; my0 = e.clientY;
+      drawGraph(); return;
+    }
+    if(e.pointerType !== 'mouse') return;
     const rect=gCanvas.getBoundingClientRect();
     const ex=(e.clientX-rect.left-gVx)/gSc, ey=(e.clientY-rect.top-gVy)/gSc;
     let found=null;
     for(const n of graph.nodes){ const p=pos[n.id]; if(p&&Math.hypot(ex-p.x,ey-p.y)<starRadius(n)+7){ found=n; break; } }
     if(found!==hoverNodeId){ hoverNodeId=found?found.id:null; gCanvas.style.cursor=found?'pointer':'grab'; if(settled) drawGraph(); }
   });
+  const endDrag = ()=>{ dragging=false; gCanvas.classList.remove('dragging'); };
+  gCanvas.addEventListener('pointerup', endDrag);
+  gCanvas.addEventListener('pointercancel', endDrag);
+  window.addEventListener('pointerup', endDrag);
+
+  // Wheel zoom, anchored on the cursor so the point under it stays put.
+  gCanvas.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const rect = gCanvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
+    const next = Math.max(.25, Math.min(5, gSc*factor));
+    if(next === gSc) return;
+    gVx = cx - (cx - gVx) * (next/gSc);
+    gVy = cy - (cy - gVy) * (next/gSc);
+    gSc = next;
+    wake();
+  }, {passive:false});
+
+  // Two-finger pinch to zoom on touch devices.
+  gCanvas.addEventListener('touchmove', e=>{
+    if(e.touches.length !== 2) return;
+    e.preventDefault();
+    const [a,b] = e.touches;
+    const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+    if(pinchDist > 0){
+      const rect = gCanvas.getBoundingClientRect();
+      const cx = (a.clientX+b.clientX)/2 - rect.left, cy = (a.clientY+b.clientY)/2 - rect.top;
+      const next = Math.max(.25, Math.min(5, gSc * (d/pinchDist)));
+      gVx = cx - (cx - gVx) * (next/gSc);
+      gVy = cy - (cy - gVy) * (next/gSc);
+      gSc = next;
+      wake();
+    }
+    pinchDist = d;
+  }, {passive:false});
+  gCanvas.addEventListener('touchend', ()=>{ pinchDist = 0; });
+
   gCanvas.addEventListener('click',e=>{
     const rect=gCanvas.getBoundingClientRect();
     const ex=(e.clientX-rect.left-gVx)/gSc, ey=(e.clientY-rect.top-gVy)/gSc;
@@ -869,6 +931,21 @@ function setupCanvas(){
       }
     }
     selNodeId=null; loadExec(); if(settled) drawGraph();
+  });
+  gCanvas.addEventListener('keydown', e=>{
+    const step = e.shiftKey ? 60 : 24;
+    if(e.key === 'ArrowLeft'){ gVx += step; wake(); e.preventDefault(); return; }
+    if(e.key === 'ArrowRight'){ gVx -= step; wake(); e.preventDefault(); return; }
+    if(e.key === 'ArrowUp'){ gVy += step; wake(); e.preventDefault(); return; }
+    if(e.key === 'ArrowDown'){ gVy -= step; wake(); e.preventDefault(); return; }
+    if(e.key === '+' || e.key === '='){ zoomG(1.2); e.preventDefault(); return; }
+    if(e.key === '-'){ zoomG(1/1.2); e.preventDefault(); return; }
+    if(e.key === '0'){ centerG(); e.preventDefault(); return; }
+    if(e.key === 'Enter' && hoverNodeId){
+      selNodeId = hoverNodeId;
+      const n = graph.nodes.find(x => x.id === hoverNodeId);
+      if(n){ renderExecDetails(n); $('ctxQuery').value = n.name; loadContext(); }
+    }
   });
   new ResizeObserver(()=>{ if(settled) drawGraph(); }).observe(gCanvas.parentElement);
 }
@@ -1007,11 +1084,26 @@ async function loadEvents(){
   }catch(e){}
 }
 
+// ── Add repo modal ─────────────────────────────────────────────────────
+let _addModalReturnFocus = null;
+function openAddModal(){
+  _addModalReturnFocus = document.activeElement;
+  mAdd.classList.add('open');
+  // Focus must move into the dialog, otherwise keyboard users stay on the
+  // trigger behind the overlay and the input is unreachable.
+  requestAnimationFrame(()=>{ $('repoPathInput').focus(); });
+}
+function closeAddModal(){
+  mAdd.classList.remove('open');
+  if(_addModalReturnFocus && _addModalReturnFocus.focus) _addModalReturnFocus.focus();
+  _addModalReturnFocus = null;
+}
+
 // ── Add repo ───────────────────────────────────────────────────────────
 async function addRepo(){
   const path=$('repoPathInput').value.trim();
   if(!path){ toast('Enter a local folder path first.', true); return; }
-  $('mAdd').classList.remove('open');
+  closeAddModal();
   try{
     const d=await api('POST','/api/repos/add',{path});
     toast(`Indexed ${d.name}: ${fmt(d.files)} files, ${fmt(d.nodes)} nodes.`);
@@ -1023,8 +1115,8 @@ async function addRepo(){
 }
 $('repoPathInput').addEventListener('keydown',e=>{ if(e.key==='Enter') addRepo(); });
 document.addEventListener('keydown',e=>{
-  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='n'){ e.preventDefault(); mAdd.classList.add('open'); }
-  if(e.key==='Escape') mAdd.classList.remove('open');
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='n'){ e.preventDefault(); openAddModal(); }
+  if(e.key==='Escape' && mAdd.classList.contains('open')) closeAddModal();
 });
 
 // ── Live stream ────────────────────────────────────────────────────────

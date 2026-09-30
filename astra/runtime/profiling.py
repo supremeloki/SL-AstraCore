@@ -52,7 +52,7 @@ class Profiler:
         )
 
     @contextmanager
-    def profile(self, name: str = ""):
+    def profile(self, _name: str = ""):
         """Context manager for profiling a code block."""
         self.enable()
         start = time.time()

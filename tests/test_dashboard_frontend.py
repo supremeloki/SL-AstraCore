@@ -78,3 +78,37 @@ def test_all_html_sinks_escape_untrusted_data():
         if re.search(r"\$\{", expr) and "esc(" not in expr:
             offenders.append(expr.strip()[:90])
     assert not offenders, "unescaped innerHTML interpolations: " + "; ".join(offenders[:5])
+
+
+def test_canvas_is_keyboard_reachable():
+    """The chart was a bare canvas: no focus, no role, no keyboard control."""
+    assert 'id="gCanvas" tabindex="0"' in SOURCE
+    assert 'role="img"' in SOURCE
+    assert "aria-label" in SOURCE
+
+
+def test_canvas_supports_pointer_wheel_and_touch():
+    body = _body_of("setupCanvas")
+    for event in ("pointerdown", "pointermove", "pointerup", "wheel", "touchmove"):
+        assert f"'{event}'" in body, f"{event} is not handled; the chart is mouse-only"
+
+
+def test_canvas_has_keyboard_pan_and_zoom():
+    body = _body_of("setupCanvas")
+    for key in ("ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"):
+        assert key in body, f"{key} does not pan the chart"
+    assert "'+'" in body and "'-'" in body, "no keyboard zoom"
+
+
+def test_tree_is_keyboard_navigable():
+    assert 'tabindex="0"' in _body_of("buildTree"), "tree items are not focusable"
+    assert 'role="treeitem"' in _body_of("buildTree")
+    assert "ArrowDown" in SOURCE and "ArrowUp" in SOURCE, "no arrow-key navigation in the tree"
+    assert "tabindex" in SOURCE.split("keydown", 1)[-1][:400] or "tree-item" in SOURCE
+
+
+def test_modal_manages_focus():
+    assert 'role="dialog"' in SOURCE and 'aria-modal="true"' in SOURCE
+    assert "function openAddModal()" in SOURCE
+    assert "repoPathInput').focus()" in SOURCE, "opening the modal must move focus into it"
+    assert "_addModalReturnFocus" in SOURCE, "closing must return focus to the trigger"

@@ -4,6 +4,36 @@ from astra.models.graph_node import NodeType
 
 logger = get_logger("astra.context.graph_query")
 
+# Words too generic to stem-match on: they would flood every query.
+_STEM_STOPWORDS = frozenset({"a", "an", "the", "is", "are", "in", "of", "to", "and", "or", "it", "this"})
+
+
+def _light_stem(word):
+    """Crude suffix stripper: enough to bridge 'indexing' and 'index'.
+
+    Deliberately tiny — a real stemmer pulls in nltk and is not worth the weight
+    for a local single-user tool. Only the query word is stemmed, so identifier
+    boundaries in the index are never mangled.
+    """
+    if len(word) <= 4 or word in _STEM_STOPWORDS:
+        return ""
+    for suffix in ("ing", "ed"):
+        if word.endswith(suffix):
+            base = word[: -len(suffix)]
+            if len(base) < 3:
+                return ""
+            # 'running' -> 'runn' -> 'run': collapse a doubled final consonant.
+            if len(base) > 3 and base[-1] == base[-2] and base[-1] not in "aeiou":
+                base = base[:-1]
+            return base
+    if word.endswith("ies") and len(word) > 4:
+        return word[:-3] + "y"
+    if word.endswith("sses") or word.endswith("shes") or word.endswith("ches"):
+        return word[:-2]
+    if word.endswith("s") and not word.endswith("ss") and len(word) > 4:
+        return word[:-1]
+    return ""
+
 
 class GraphQuery:
     def __init__(self, knowledge_graph):
@@ -34,10 +64,17 @@ class GraphQuery:
                 self._label_index.setdefault(token, set()).add(node.id)
 
     def find_by_keyword(self, keyword):
+        """Substring match, plus a light stem so 'indexing' finds 'index_repo'.
+
+        A user asking "how does indexing work" should not have to know whether
+        the code calls it index_repo, indexing, or index. Only the query word is
+        stemmed; indexed tokens are compared as-is so precision is preserved.
+        """
         kw = keyword.lower()
+        stem = _light_stem(kw)
         matches = set()
         for token, ids in self._label_index.items():
-            if kw in token:
+            if kw in token or (stem and (stem in token or token in stem)):
                 matches.update(ids)
         return list(matches)
 

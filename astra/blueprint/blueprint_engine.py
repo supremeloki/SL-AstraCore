@@ -143,7 +143,7 @@ class BlueprintEngine:
             ))
         return steps
 
-    def _mvp(self, task):
+    def _mvp(self, _task):
         return MvpSpec(
             must_work=[
                 "Build project index from files",

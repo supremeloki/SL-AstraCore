@@ -403,7 +403,7 @@ def patch_diff(path: str, file_path: str = ""):
     try:
         fp = _confine_to_registered_repo(fp)
     except HTTPException as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc.detail))
+        raise HTTPException(status_code=exc.status_code, detail=str(exc.detail)) from None
     if not os.path.isfile(fp):
         return {"file": fp, "lines": [], "error": "not a file"}
     try:
@@ -429,7 +429,7 @@ async def patch_apply(payload: Optional[dict] = None):
     try:
         fp = _confine_to_registered_repo(fp)
     except HTTPException as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc.detail))
+        raise HTTPException(status_code=exc.status_code, detail=str(exc.detail)) from None
     if not os.path.isfile(fp):
         return {"status": "error", "message": "not an existing file inside a registered repo"}
     try:

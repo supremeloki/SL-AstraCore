@@ -243,10 +243,36 @@ class RuntimeOrchestrator:
             }
             stale_ids = sorted(existing_ids - fresh_ids - preserved_ids)
 
+            # 5d. Edges between surviving nodes also go stale: remove an import
+            # from a file and the graph kept reporting the dependency forever.
+            # Node deletion cascades, so only edges whose endpoints both survive
+            # need an explicit delete. An edge touching a file we could not read
+            # this run is kept: we have no fresh view of it, so it is not stale.
+            preserved_prefixes = tuple(f"{fid}::" for fid in preserved_file_ids)
+            upserted_keys = {(x.from_node, x.to_node, x.type.name) for x in edges_to_upsert}
+            surviving = fresh_ids | preserved_ids
+
+            def _touches_unreadable(node_id: str) -> bool:
+                if node_id in preserved_file_ids:
+                    return True
+                # startswith(()) is always True, so only test when non-empty.
+                return bool(preserved_prefixes) and node_id.startswith(preserved_prefixes)
+
+            stale_edges = sorted(
+                (e.from_node, e.to_node, e.type)
+                for e in storage.get_all_edges()
+                if (e.from_node, e.to_node, e.type.name) not in upserted_keys
+                and e.from_node in surviving
+                and e.to_node in surviving
+                and not _touches_unreadable(e.from_node)
+                and not _touches_unreadable(e.to_node)
+            )
+
             mutator.apply_batch(
                 nodes_to_delete=stale_ids,
                 nodes_to_upsert=nodes_to_upsert,
                 edges_to_upsert=edges_to_upsert,
+                edges_to_delete=stale_edges,
             )
 
             # 7. Update record

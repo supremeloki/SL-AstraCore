@@ -51,7 +51,7 @@ def get_current_context() -> Optional[CancellationContext]:
 
 
 @contextmanager
-def cancellation_scope(reason: str = "") -> Iterator[CancellationContext]:
+def cancellation_scope(_reason: str = "") -> Iterator[CancellationContext]:
     """Create a new cancellation scope."""
     parent = get_current_context()
     ctx = CancellationContext(parent=parent)

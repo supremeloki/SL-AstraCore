@@ -86,6 +86,6 @@ class ExecutionSandbox:
             return False
         return not (write and not self.config.allow_filesystem_write)
 
-    def validate_network_access(self, host: str, port: int) -> bool:
+    def validate_network_access(self, _host: str, _port: int) -> bool:
         """Validate if network access is permitted."""
         return self.config.allow_network

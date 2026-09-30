@@ -132,7 +132,7 @@ def _resolve_one_import(
     dep: IRDependency,
     source_file: str,
     module_to_file: dict[str, str],
-    file_to_module: dict[str, str],
+    _file_to_module: dict[str, str],
     parsed_files: dict[str, str],
 ) -> str | None:
     target = dep.target_module
