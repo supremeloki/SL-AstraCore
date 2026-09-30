@@ -14,6 +14,9 @@ from astra.ir.models import (
 )
 from astra.graph.pattern_enricher import PatternMatch, detect_design_patterns, detect_naming_conventions
 from astra.graph.conflict_enricher import ConflictMatch, detect_naming_conflicts
+from astra.core.logger import get_logger
+
+logger = get_logger("astra.graph.enrichment")
 
 
 def _pattern_id(match: PatternMatch) -> str:
@@ -114,15 +117,18 @@ def build_enrichment_edges(
 
 def enrich_graph(
     parse_results: Sequence[IRFileNode],
-) -> tuple[list[IRNode], list[IREdge]]:
+) -> tuple[list[IRNode], list[IREdge], list[str]]:
     """Run pattern + conflict detection over parsed files.
 
-    Returns extra nodes/edges to merge into the index batch. Never raises —
-    enrichment is best-effort and must not break indexing.
+    Returns ``(nodes, edges, warnings)`` — extra nodes/edges to merge into the
+    index batch, plus non-fatal problems worth surfacing. Never raises:
+    enrichment is best-effort and must not break indexing. But a crash inside
+    enrichment is reported in ``warnings``; silently returning nothing is
+    indistinguishable from a repository that genuinely has no patterns.
     """
     file_nodes = [r for r in parse_results if r.file_path]
     if not file_nodes:
-        return [], []
+        return [], [], []
     try:
         patterns = [
             *detect_design_patterns(file_nodes),
@@ -135,6 +141,8 @@ def enrich_graph(
 
         file_ids = {f"file:{n.file_path}" for n in file_nodes}
         edges = build_enrichment_edges(pattern_nodes, conflict_nodes, file_ids)
-        return [*pattern_nodes, *conflict_nodes], edges
-    except Exception:
-        return [], []
+        return [*pattern_nodes, *conflict_nodes], edges, []
+    except Exception as exc:
+        reason = f"enrichment failed ({type(exc).__name__}: {exc}) — patterns, conflicts and risk annotations were not computed"
+        logger.warning(reason)
+        return [], [], [reason]

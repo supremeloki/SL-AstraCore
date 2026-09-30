@@ -71,8 +71,18 @@ def test_runtime_contracts_are_instantiable():
     assert plan.steps[0].action_type == "analyze"
 
 
-def test_protocol_contracts_exist():
-    assert ParserEngine is not None
-    assert KnowledgeGraph is not None
-    assert GraphQueryEngine is not None
-    assert ContextEngine is not None
+def test_protocol_contracts_still_satisfy_the_engine():
+    """The old version asserted `X is not None`, which cannot fail — and these
+    are typing.Protocols, so what matters is that the production classes still
+    satisfy them and the declared methods still exist."""
+    for protocol in (ParserEngine, KnowledgeGraph, GraphQueryEngine, ContextEngine):
+        assert getattr(protocol, "_is_protocol", False), f"{protocol} stopped being a Protocol"
+
+    # A real implementation must still expose what the orchestrator calls.
+    from astra.parser.registry import build_default_parser_registry
+
+    concrete_parser = build_default_parser_registry()
+    assert callable(getattr(concrete_parser, "parse", None))
+    assert hasattr(ParserEngine, "parse_repository"), (
+        "ParserEngine no longer declares parse_repository()"
+    )

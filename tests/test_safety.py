@@ -127,15 +127,23 @@ class TestResourceQuotaEnforcer:
         rq = ResourceQuotaEnforcer(QuotaConfig(max_memory_mb=1))
         rq.start_monitoring(on_violation=lambda v: violations_captured.extend(v))
         rq.stop_monitoring()
+        # A callback that is never wired to the monitor would still leave this
+        # empty, so assert the plumbing exists rather than only "did not raise".
+        assert rq._monitor_thread is not None
+        assert not rq._monitor_thread.is_alive()
 
     def test_enforce_context_manager(self):
         rq = ResourceQuotaEnforcer()
         with rq.enforce():
-            pass  # Should complete without error
+            # enforce() is start_monitoring() ... stop_monitoring(); if either
+            # half were dropped this would still "not raise".
+            assert rq._monitor_thread is not None
+            assert rq._monitor_thread.is_alive()
+        assert not rq._monitor_thread.is_alive()
 
     def test_apply_os_limits_does_not_crash(self):
         rq = ResourceQuotaEnforcer()
-        rq.apply_os_limits()  # Should not raise on Unix or Windows
+        assert rq.apply_os_limits() is None  # Windows no-ops; Unix sets rlimits
 
     def test_enforce_memory_limit(self):
         rq = ResourceQuotaEnforcer()

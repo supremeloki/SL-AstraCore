@@ -221,7 +221,8 @@ class RuntimeOrchestrator:
             file_nodes_for_enrichment = [
                 result.file_node for result in parse_results if result.file_node
             ]
-            extra_nodes, extra_edges = enrich_graph(file_nodes_for_enrichment)
+            extra_nodes, extra_edges, enrich_warnings = enrich_graph(file_nodes_for_enrichment)
+            record.warnings.extend(enrich_warnings)
             fresh_file_ids = {n.id for n in nodes_to_upsert}
             extra_edges = [
                 e for e in extra_edges

@@ -92,8 +92,11 @@ class TestResourceManager:
         rm = ResourceManager()
         q = ResourceQuota(max_memory_mb=1024)
         rm.assign_quota("t1", q)
+        # A quota that is never registered is a silent no-op, which is exactly
+        # the bug this test exists to catch.
+        assert rm._active_quotas["t1"] is q
         rm.release_quota("t1")
-        # No error
+        assert "t1" not in rm._active_quotas
 
     def test_enforce_timeout(self):
         rm = ResourceManager()

@@ -109,13 +109,26 @@ def orch_pack(repo, budget):
 
 
 def test_zero_and_negative_budgets_are_clamped(repo):
+    """A non-positive budget means "use the default", not "return nothing" —
+    the old assertions (`x > 0 or x == 0`, `len(...) >= 0`) held for any value."""
     orch = RuntimeOrchestrator()
     orch.register_repo(str(repo))
     orch.index_repo(str(repo))
+
+    default_budget = orch.query_context(
+        str(repo), seed_node_ids=[], query_intent="login", max_tokens=None
+    ).token_budget
+
     for bad in (0, -5):
-        pack = orch.query_context(str(repo), seed_node_ids=[], query_intent="login", max_tokens=bad)
-        assert pack.token_budget == 0 or pack.token_budget > 0
-        assert len(pack.nodes) >= 0  # must not raise
+        pack = orch.query_context(
+            str(repo), seed_node_ids=[], query_intent="login", max_tokens=bad
+        )
+        assert pack.token_budget == default_budget, f"max_tokens={bad} was not clamped"
+        assert len(pack.nodes) == 2, "the clamped pack dropped real matches"
+
+    # A real budget is still honoured, so the clamp is not masking it.
+    small = orch.query_context(str(repo), seed_node_ids=[], query_intent="login", max_tokens=4000)
+    assert small.token_budget == 4000
 
 
 def test_snippet_is_empty_for_deleted_file(repo):
