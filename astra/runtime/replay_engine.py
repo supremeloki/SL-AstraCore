@@ -34,7 +34,7 @@ class ReplayEngine:
         if not os.path.exists(self._journal_path):
             return self._events
 
-        with open(self._journal_path) as f:
+        with open(self._journal_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -83,7 +83,7 @@ class ReplayEngine:
 
     def export_replay(self, output_path: str) -> None:
         """Export replay log to JSON."""
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump([
                 {
                     "event_type": e.event_type,

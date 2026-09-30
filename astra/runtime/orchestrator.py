@@ -390,6 +390,13 @@ class RuntimeOrchestrator:
         """
         record = self._get_record(root_path)
 
+        # A query that arrives while the first index is still queued behind the
+        # lock used to raise "Repository not active (status=registered)": the
+        # lock serialises the two, but nothing told the query the index was
+        # coming. Indexing here is idempotent, so the wait is the fix.
+        if record.status in (RepoStatus.REGISTERED, RepoStatus.UNKNOWN):
+            self.index_repo(root_path)
+
         with self._lock_for(root_path), file_lock(record.db_path):
             # Re-read the status now that the writer has released: a query that
             # arrived mid-index used to fail outright instead of reading the

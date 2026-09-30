@@ -75,9 +75,14 @@ def build_enrichment_edges(
         nid = f"file:{path}"
         if nid in file_ids:
             return nid
-        # Windows-style paths stored with backslashes; try normalized too.
-        alt = f"file:{path.replace('/', chr(92))}" if "/" in path else None
-        return alt if alt in file_ids else None
+        # A path stored with the other platform's separator. Both spellings are
+        # tried regardless of which one this host uses, because the graph may
+        # have been indexed elsewhere.
+        alternate = (
+            f"file:{path.replace(chr(92), '/')}" if chr(92) in path
+            else f"file:{path.replace('/', chr(92))}"
+        )
+        return alternate if alternate in file_ids else None
 
     for p in pattern_nodes:
         for loc in p.locations:

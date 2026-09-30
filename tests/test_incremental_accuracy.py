@@ -17,7 +17,9 @@ def _edges(db_path):
     storage.connect()
     try:
         return {
-            (e.from_node.rsplit("\\", 1)[-1], e.to_node.rsplit("\\", 1)[-1], e.type.name)
+            (e.from_node.replace("\\", "/").rsplit("/", 1)[-1],
+             e.to_node.replace("\\", "/").rsplit("/", 1)[-1],
+             e.type.name)
             for e in storage.get_all_edges()
         }
     finally:

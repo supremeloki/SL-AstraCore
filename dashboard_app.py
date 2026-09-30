@@ -306,7 +306,13 @@ def graph_node(path: str, node_id: str):
 
         def _name(nid: str) -> str:
             n = storage.get_node(nid)
-            return n.name if n else nid.rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
+            # Normalise the separator first, then take the last segment. The
+            # previous version split on "\\" then "/" in sequence, so on Linux —
+            # where the first split matches nothing — a POSIX path came back
+            # whole and the UI rendered "/tmp/pytest-.../lib2.py" as a name.
+            if n:
+                return n.name
+            return nid.replace("\\", "/").rsplit("/", 1)[-1]
 
         return {
             "id": node.id,

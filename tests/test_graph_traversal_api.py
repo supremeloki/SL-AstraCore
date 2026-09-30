@@ -7,6 +7,7 @@ import" when asked "what breaks if I change this file". Both are now reachable
 over HTTP and the impact traversal follows reverse edges.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -33,7 +34,10 @@ def indexed_repo(tmp_path):
 
 
 def _node_id(repo: Path, name: str) -> str:
-    return f"file:{repo}{chr(92)}{name}"
+    # os.sep, not a literal backslash: the indexer joins a file's path with the
+    # platform separator, so a hardcoded "\\" built a node id that exists only
+    # on Windows. The test passed there and failed on both Linux runners.
+    return f"file:{repo}{os.sep}{name}"
 
 
 def _record_for(repo: Path):

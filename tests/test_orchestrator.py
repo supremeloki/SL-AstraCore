@@ -10,6 +10,8 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from astra.parser.python_adapter import PythonParserAdapter
 from astra.parser.registry import ParserRegistry
 from astra.runtime.models import RepoStatus
@@ -121,7 +123,14 @@ def test_refresh_repo_idempotent():
     assert e1 == e2
 
 
-def test_query_without_indexing_raises():
+def test_query_without_indexing_indexes_first():
+    """Querying a registered-but-unindexed repo used to raise.
+
+    It no longer does: a query that arrives before the first index waits for
+    one, because "Repository not active (status=registered)" was a race the
+    caller could do nothing about. Indexing is idempotent, so the query
+    triggers it.
+    """
     repo_path = _make_temp_repo()
 
     registry = ParserRegistry()
@@ -130,11 +139,18 @@ def test_query_without_indexing_raises():
     runtime = RuntimeOrchestrator(parser_registry=registry)
     runtime.register_repo(repo_path)
 
-    try:
-        runtime.query_context(repo_path, seed_node_ids=["any"])
-        assert False, "Should have raised"
-    except RuntimeError:
-        pass
+    runtime.query_context(repo_path, seed_node_ids=[])
+
+    assert runtime.get_repo(repo_path).status == RepoStatus.ACTIVE
+    assert runtime.get_repo(repo_path).node_count > 0, "indexing did not produce nodes"
+
+
+def test_querying_an_unregistered_repo_still_raises():
+    """Indexing on demand must not paper over a path that was never registered."""
+    with pytest.raises(ValueError, match="not registered"):
+        RuntimeOrchestrator().query_context(
+            _make_temp_repo() + "-never-registered", seed_node_ids=[]
+        )
 
 
 def test_list_repos():
