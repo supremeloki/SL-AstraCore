@@ -40,20 +40,32 @@ jobs:
         env:
           STRICT_KPI: "1"
 
-      # The job-log endpoint is not readable with the token available here, so a
-      # red build is undiagnosable. Publish the failure into a job output, which
-      # the checks API does expose.
-      - name: Diagnose failure
-        if: failure()
-        shell: bash
-        run: |
-          set +e
-          python -m pytest tests/ -q --tb=short -x > failure.txt 2>&1
-          echo "exit=$?" >> failure.txt
-          tail -c 60000 failure.txt
-
       - name: Lint
         run: python -m ruff check astra/ tests/ dashboard_app.py
 
       - name: Types
         run: python -m mypy astra/ dashboard_app.py --python-version ${{ matrix.python-version }}
+
+      # The job-log endpoint returns 401 for every token available to the person
+      # fixing this, so a red build was undiagnosable. An issue is readable.
+      - name: Report failure
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OS_NAME: ${{ matrix.os }}
+          PY_VERSION: ${{ matrix.python-version }}
+        run: |
+          set +e
+          python -m pytest tests/ -q --tb=long -x > failure.txt 2>&1
+          python -m ruff check astra/ tests/ dashboard_app.py >> failure.txt 2>&1
+          python -m mypy astra/ dashboard_app.py --python-version "$PY_VERSION" >> failure.txt 2>&1
+          {
+            echo "### $OS_NAME / Python $PY_VERSION @ ${{ github.sha }}"
+            echo
+            echo '```'
+            tail -c 50000 failure.txt
+            echo '```'
+          } > body.md
+          gh issue create --title "CI failure: $OS_NAME / Python $PY_VERSION @ ${{ github.sha }}" --body-file body.md
