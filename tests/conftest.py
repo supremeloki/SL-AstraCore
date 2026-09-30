@@ -6,8 +6,17 @@ guard rather than switching it off.
 """
 
 import os
+import tempfile
 
 os.environ.setdefault("ASTRA_TOKEN", "test-token")
+
+# Every orchestrator writes a per-repo DuckDB under ASTRA_HOME. Left unset they
+# share the real ~/.astra, so a test run left 1,700+ databases behind and two
+# runs collided on the same files — DuckDB takes an exclusive lock, which is
+# how the Windows CI job failed. Point it at a throwaway directory instead.
+os.environ.setdefault(
+    "ASTRA_HOME", os.path.join(tempfile.gettempdir(), "astra_pytest_home")
+)
 
 import pytest  # noqa: E402
 
