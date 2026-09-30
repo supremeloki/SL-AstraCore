@@ -13,7 +13,15 @@ from astra.runtime.event_bus import EventBus, RuntimeEvent
 
 @pytest.fixture(scope="module")
 def client():
-    return TestClient(dashboard_app.app)
+    dashboard_app._ACCESS_TOKEN = "test-token"
+
+    class _AuthedClient(TestClient):
+        def request(self, method, url, **kwargs):
+            headers = dict(kwargs.pop("headers", {}) or {})
+            headers.setdefault("Authorization", f"Bearer {dashboard_app._ACCESS_TOKEN}")
+            return super().request(method, url, headers=headers, **kwargs)
+
+    return _AuthedClient(dashboard_app.app)
 
 
 class TestReposAddValidation:

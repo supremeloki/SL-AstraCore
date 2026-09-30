@@ -524,6 +524,20 @@ select:focus,input:focus{outline:none;border-color:var(--gold)}
 
 <script>
 'use strict';
+// ── Access token ───────────────────────────────────────────────────────
+// The server mints a token per process and expects it on every API call. It
+// arrives in the URL on first navigation, then lives in sessionStorage so a
+// reload or a jump to another panel does not need it pasted again.
+const ASTRA_TOKEN = (()=>{
+  const fromUrl = new URLSearchParams(location.search).get('token');
+  if(fromUrl){
+    sessionStorage.setItem('astra.token', fromUrl);
+    history.replaceState(null, '', location.pathname); // keep it out of the address bar
+    return fromUrl;
+  }
+  return sessionStorage.getItem('astra.token') || '';
+})();
+
 // ── Constants ──────────────────────────────────────────────────────────
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -567,12 +581,35 @@ function toast(msg, err){
 }
 async function api(method, path, body){
   const opts = {headers:{'Accept':'application/json'}};
+  if(ASTRA_TOKEN) opts.headers['Authorization'] = 'Bearer ' + ASTRA_TOKEN;
   if(body){ opts.method='POST'; opts.body=JSON.stringify(body); opts.headers['Content-Type']='application/json'; }
   const r = await fetch(path, opts);
+  if(r.status === 401){
+    // The token in sessionStorage is stale — the server restarted and minted a
+    // new one. Say so plainly instead of failing every panel with a 401.
+    sessionStorage.removeItem('astra.token');
+    showTokenExpired();
+    throw new Error('access token expired — reopen the URL printed by the server');
+  }
   if(!r.ok) throw new Error((await r.text()).slice(0,180));
   return r.json();
 }
 const fileName = p => String(p||'').split('/').pop().split('\\').pop();
+
+function showTokenExpired(){
+  if(document.getElementById('tokenExpired')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'tokenExpired';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:grid;place-content:center;'+
+    'background:rgba(6,8,19,.94);backdrop-filter:blur(6px);text-align:center;padding:2rem';
+  overlay.innerHTML = '<div style="max-width:460px">'+
+    '<div style="font-size:2rem;color:var(--gold);margin-bottom:.75rem">✦</div>'+
+    '<h1 style="font-size:1.1rem;font-weight:600;margin-bottom:.6rem">Session token expired</h1>'+
+    '<p style="color:var(--dim);font-size:.85rem;line-height:1.6">The dashboard server was restarted and issued a new '+
+    'access token. Reopen the URL it printed in the terminal to continue &mdash; it looks like '+
+    '<code style="color:var(--gold)">http://127.0.0.1:8780/?token=…</code></p></div>';
+  document.body.appendChild(overlay);
+}
 
 // ── Overview polling ───────────────────────────────────────────────────
 async function loadOverview(){

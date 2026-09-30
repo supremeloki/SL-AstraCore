@@ -3,6 +3,7 @@
 from pathlib import Path
 import asyncio
 import os
+import secrets
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
@@ -46,17 +47,50 @@ def _emit(event_type: str, payload: dict, source: str = "dashboard") -> None:
     _event_bus.emit(RuntimeEvent(event_type=event_type, payload=payload, source=source))
 
 
-# ── CSRF / DNS-rebinding guard ─────────────────────────────────────────
-# Every state-changing route is reachable by a plain GET with a `path` query
-# parameter, so any page the user has open could trigger a full index of an
-# arbitrary directory (`<img src="http://localhost:8780/api/context?path=C:/">`)
-# and then write into it through /api/patch/apply. Browsers attach Origin to
-# cross-origin requests even for GET, so refusing foreign origins closes it.
+# ── Access guard: bearer token + CSRF / DNS-rebinding ───────────────────
+# "Local" is not a security boundary: any page open in the same browser can
+# reach localhost:8780, and this app indexes arbitrary directories and writes
+# into registered ones. A token minted at startup and passed in the URL closes
+# that; the SPA keeps it in sessionStorage so navigation inside the app is
+# seamless.
+#
+# Set ASTRA_TOKEN to pin it; otherwise one is generated per process and printed
+# to the console. ASTRA_DISABLE_AUTH=1 opts out for a trusted single-user setup.
 _ALLOWED_ORIGIN_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+_PUBLIC_PATHS = {"/manifest.webmanifest", "/favicon.ico"}
+
+
+def _resolve_token() -> tuple[str, bool]:
+    if os.environ.get("ASTRA_DISABLE_AUTH") == "1":
+        return "", False
+    pinned = os.environ.get("ASTRA_TOKEN", "").strip()
+    if pinned:
+        return pinned, True
+    return secrets.token_urlsafe(24), True
+
+
+_ACCESS_TOKEN, _AUTH_REQUIRED = _resolve_token()
+
+
+def _bearer_of(request: Request) -> str:
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return request.query_params.get("token", "")
 
 
 @app.middleware("http")
-async def _reject_foreign_origins(request: Request, call_next):
+async def _guard_requests(request: Request, call_next):
+    from fastapi.responses import JSONResponse
+
+    path = request.url.path
+    needs_token = _AUTH_REQUIRED and path not in _PUBLIC_PATHS and not path.startswith("/static/")
+    if needs_token and not secrets.compare_digest(_bearer_of(request), _ACCESS_TOKEN):
+        # The first navigation cannot carry a header, so the shell is returned
+        # with the token in the body, which the SPA reads on load.
+        body = {"detail": "token required", "token": _ACCESS_TOKEN} if path == "/" else {"detail": "invalid or missing token"}
+        return JSONResponse(status_code=401, content=body)
+
     origin = request.headers.get("origin")
     if origin:
         host = origin.split("//", 1)[-1].split("/", 1)[0]
@@ -679,4 +713,12 @@ def web_manifest():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8780")))
+
+    port = int(os.environ.get("PORT", "8780"))
+    if _AUTH_REQUIRED:
+        # ASCII only: the Windows console defaults to cp1252 and would crash on
+        # a box-drawing arrow or any other non-Latin glyph.
+        print("\n  SL-AstraCore Observatory")
+        print(f"  Open  http://127.0.0.1:{port}/?token={_ACCESS_TOKEN}\n")
+        print("  (set ASTRA_TOKEN to pin it, or ASTRA_DISABLE_AUTH=1 to opt out)\n")
+    uvicorn.run(app, host="0.0.0.0", port=port)

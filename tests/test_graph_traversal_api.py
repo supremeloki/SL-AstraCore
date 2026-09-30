@@ -10,7 +10,6 @@ over HTTP and the impact traversal follows reverse edges.
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 import dashboard_app as da
 from astra.graph.query_engine import GraphQueryEngine
@@ -18,8 +17,8 @@ from astra.storage.backend import StorageProvider
 
 
 @pytest.fixture
-def client():
-    return TestClient(da.app, raise_server_exceptions=False)
+def client(auth_client):
+    return auth_client
 
 
 @pytest.fixture

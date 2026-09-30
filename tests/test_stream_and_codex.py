@@ -10,7 +10,6 @@ import os
 import subprocess
 
 import pytest
-from fastapi.testclient import TestClient
 
 import dashboard_app as da
 from astra.agents.models import AgentRequest
@@ -18,8 +17,8 @@ from astra.agents.providers import CodexProvider
 
 
 @pytest.fixture
-def client():
-    return TestClient(da.app, raise_server_exceptions=False)
+def client(auth_client):
+    return auth_client
 
 
 # ── SSE stream ───────────────────────────────────────────────────────────
