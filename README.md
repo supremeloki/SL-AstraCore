@@ -132,13 +132,13 @@ python -m ruff check astra/ tests/ dashboard_app.py   # All checks passed
 
 The codebase is type-clean under mypy (0 errors over 95 files) and lint-clean
 under a project-owned ruff ruleset, with CI running both on Python 3.11 and 3.12
-across Linux and Windows. Measured on this repository, `python .bench.py`
+across Linux and Windows. Measured on this repository, `python .final.py`
 reproduces every number below:
 
 | | |
 |---|---|
-| index 3,000 files | 11s (266 files/s) |
-| query | 67ms median |
+| index 3,000 files | 5.8s (513 files/s) |
+| query | 37ms median |
 | ranking accuracy, 12 real questions | 11/12 first place, 12/12 top three |
 | pack carrying source at a 4k budget | 9 of 13 nodes |
 

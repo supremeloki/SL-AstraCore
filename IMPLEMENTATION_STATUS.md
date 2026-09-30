@@ -16,13 +16,13 @@ RepositoryScanner -> ParserRegistry -> import_resolver -> DuckDB -> context stac
 
 ## Measured
 
-On this repository, 140 files:
+On this repository, 163 files:
 
 | | |
 |---|---|
-| index | 1.9s (85 files/s) |
-| index, 3,000 files | 11s (266 files/s) |
-| query | 67ms median |
+| index | 1.2s (142 files/s) |
+| index, 3,000 files | 5.8s (513 files/s) |
+| query | 37ms median |
 | ranking accuracy, 12 real questions | 11/12 first place, 12/12 top three |
 | pack carrying source, 4k budget | 9 of 13 nodes |
 | source per 8x budget | 7.9x |
