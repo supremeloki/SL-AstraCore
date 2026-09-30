@@ -241,15 +241,13 @@ def test_each_question_ranks_its_answer_near_the_top(question, acceptable, tmp_p
     )
 
 
-@pytest.mark.parametrize("question,acceptable", CASES)
-def test_each_question_also_works_on_this_repository(question, acceptable):
-    """The same questions against the live tree, as a smoke test only.
+@pytest.fixture(scope="module")
+def self_index():
+    """This repository, indexed once for every smoke test below.
 
-    Ranking quality on a real repository is a moving target: every file added
-    or removed changes what a question can match. That is what made the
-    parametrized case above fail on CI while passing locally, so it is not
-    allowed to be the thing that fails. This variant records whether the
-    answer is present at all, without pinning a rank.
+    One index of 164 files, not one per parametrized case: the smoke test
+    runs twelve questions, and re-indexing each time was most of a
+    three-minute suite.
     """
     logging.disable(logging.CRITICAL)
     orchestrator = RuntimeOrchestrator()
@@ -260,8 +258,20 @@ def test_each_question_also_works_on_this_repository(question, acceptable):
         pytest.skip(f"could not index the repository: {exc}")
     if result.file_count == 0:
         pytest.skip("repository is empty")
+    return orchestrator
 
-    pack = orchestrator.query_context(
+
+@pytest.mark.parametrize("question,acceptable", CASES)
+def test_each_question_also_works_on_this_repository(question, acceptable, self_index):
+    """The same questions against the live tree, as a smoke test only.
+
+    Ranking quality on a real repository is a moving target: every file added
+    or removed changes what a question can match. That is what made the
+    parametrized case above fail on CI while passing locally, so it is not
+    allowed to be the thing that fails. This variant records whether the
+    answer is present at all, without pinning a rank.
+    """
+    pack = self_index.query_context(
         str(SELF), seed_node_ids=[], query_intent=question, max_tokens=4000
     )
     names = {n.name for n in pack.nodes}
