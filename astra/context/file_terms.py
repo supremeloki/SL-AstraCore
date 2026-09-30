@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from astra.context.stemming import name_stems, stem_set
+
 # Words too common in source to be evidence of anything.
 _STOPWORDS = frozenset(
     (
@@ -60,13 +62,16 @@ def file_terms(path: str, max_bytes: int = 20_000) -> set[str]:
     but they are also returned separately so the ranker can weigh a name in
     the query above a word that merely occurs in the source.
     """
-    from_file_name = _tokens(Path(path).stem.replace("_", " ").replace("-", " "))
+    from_file_name = name_stems(Path(path).stem)
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
             text = handle.read(max_bytes)
     except OSError:
         return from_file_name
-    return from_file_name | _tokens(text)
+    # Stemmed on the way in, so the ranker compares stems to stems. Doing it
+    # here rather than there means it happens once per file, not once per
+    # query per file.
+    return from_file_name | stem_set(_tokens(text))
 
 
 if __name__ == "__main__":

@@ -82,12 +82,13 @@ def test_test_detection_covers_the_usual_spellings():
 
 
 def test_a_file_outranks_a_symbol_that_shares_only_one_word():
-    """A file the query names beats a symbol that matches a single term.
+    """The file a question names beats a symbol that matches less of it.
 
-    Note this is about equal text coverage, not "files always win": given
-    "imports resolves", find_imports matches both terms while
-    import_resolver.py matches one, and the symbol correctly leads. The file
-    bonus exists to break ties, not to override evidence.
+    With stemming, a symbol built from the query's own words matches as much
+    as the file does, and the file still leads — the unit an agent navigates
+    by is the file, not one function inside someone else's. A symbol whose
+    name *is* the question can still win, because then the file is not the
+    answer to anything.
     """
     logging.disable(logging.CRITICAL)
     helper = _node("sym:some_helper", "some_helper", NodeType.FUNCTION)
@@ -96,11 +97,13 @@ def test_a_file_outranks_a_symbol_that_shares_only_one_word():
     ranked = ranking.rank([helper.id, module.id], terms=["imports", "resolves"])
     assert ranked[0][0] == module.id, "the file naming the query's words should lead"
 
-    # And a symbol matching strictly more text still wins, which is the point.
-    strong = _node("sym:resolves_imports_edges", "resolves_imports_edges", NodeType.FUNCTION)
-    ranking2 = _ranking([strong, module])
-    ranked2 = ranking2.rank([strong.id, module.id], terms=["imports", "resolves"])
-    assert ranked2[0][0] == strong.id
+    # Asked about the function itself, the function leads.
+    precise = _node(
+        "sym:resolve_imports_into_edges", "resolve_imports_into_edges", NodeType.FUNCTION
+    )
+    ranking2 = _ranking([precise, module])
+    ranked2 = ranking2.rank([precise.id, module.id], terms=["resolve_imports_into_edges"])
+    assert ranked2[0][0] == precise.id, "asking for the function by name should return it"
 
 
 def test_analytic_labels_stay_demoted():

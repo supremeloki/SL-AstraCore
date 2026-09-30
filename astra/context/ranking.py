@@ -1,3 +1,4 @@
+from astra.context.stemming import stem, stem_set
 from astra.core.logger import get_logger
 from astra.models.graph_node import NodeType
 from astra.models.task_analysis import TaskType
@@ -67,8 +68,8 @@ class Ranking:
             terms = self._source_terms_of(node)
             if not terms:
                 continue
-            for stem in {t[:6] for t in terms}:
-                frequency[stem] = frequency.get(stem, 0) + 1
+            for bucket in {stem(t) for t in terms}:
+                frequency[bucket] = frequency.get(bucket, 0) + 1
         return frequency
 
     def carried_over(self) -> tuple:
@@ -241,7 +242,8 @@ class Ranking:
         if not terms:
             return 0.0
 
-        wanted = [t for t in terms if t]
+        # Terms arrive stemmed from the indexer; stem the query to match.
+        wanted = stem_set(terms)
         if not wanted:
             return 0.0
         total = sum(1.0 + min(len(t), 12) / 12.0 for t in wanted)
@@ -258,16 +260,16 @@ class Ranking:
             # "resolves" and the code says "resolve_imports", and an exact
             # comparison scored that as no match at all. The stems are indexed
             # once per file so this stays linear rather than quadratic.
-            stems = {s[:6] for s in source_terms}
+            # Already stemmed when the file was indexed.
+            stems = set(source_terms)
             # Weight each hit by how rare that word is across the repo. A word
             # in every file counts for little; a word in one file counts a lot.
             weighted = 0.0
             maximum = 0.0
             for term in wanted:
-                stem = term[:6]
-                maximum += self._idf(stem)
-                if stem in stems:
-                    weighted += self._idf(stem)
+                maximum += self._idf(term)
+                if term in stems:
+                    weighted += self._idf(term)
             if maximum <= 0:
                 return 0.0
             return min(1.0, weighted / maximum)

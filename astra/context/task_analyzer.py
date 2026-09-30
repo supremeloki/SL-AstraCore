@@ -33,6 +33,13 @@ STOPWORDS = {
     "my", "our", "your", "their", "its", "his", "her",
     "what", "which", "who", "whom", "whose", "where", "why", "how",
     "there", "here", "when", "while", "during",
+    # Question scaffolding, not subject matter. "how does ranking work" is
+    # about ranking; treating "work" and "does" as terms sent the ranker looking
+    # for files that merely use the word.
+    "work", "works", "working", "worked", "used", "using", "uses",
+    "get", "gets", "make", "makes", "made", "take", "takes",
+    "file", "files", "code", "thing", "things", "stuff",
+    "done", "via", "per", "etc", "one", "two",
 }
 
 
