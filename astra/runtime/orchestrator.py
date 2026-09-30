@@ -52,6 +52,7 @@ class RuntimeOrchestrator:
         # "Catalog write-write conflict" and be reported as a failed repo. One
         # lock per repo, shared by writers and readers, prevents that.
         self._repo_locks: dict[str, threading.Lock] = {}
+        self._document_frequency: dict[str, tuple] = {}
         astra_home = os.environ.get("ASTRA_HOME") or os.path.join(
             os.path.expanduser("~"), ".astra"
         )
@@ -119,6 +120,8 @@ class RuntimeOrchestrator:
         root_path = record.root_path
         record.status = RepoStatus.INDEXING
         record.warnings = []
+        # The file set is about to change, so cached term counts are stale.
+        self._document_frequency.pop(record.root_path, None)
 
         if not Path(root_path).exists():
             record.status = RepoStatus.FAILED
@@ -402,7 +405,14 @@ class RuntimeOrchestrator:
         for e in storage.get_all_edges():
             kg.edges.append(e)
 
-        engine = TaskContextEngine(kg)
+        # Reuse the term counts: the graph is rebuilt every query, but the file
+        # set it describes has not changed since the last index.
+        frequency, files_indexed = self._document_frequency.get(record.root_path, (None, None))
+
+        engine = TaskContextEngine(
+            kg, document_frequency=frequency, files_indexed=files_indexed
+        )
+        self._document_frequency[record.root_path] = engine._ranking.carried_over()
         if max_tokens and max_tokens > 0:
             engine._token_budget.set_budget(max_tokens)
         _analysis, _pack, _deps, _risks = engine.build_pack(query_intent)

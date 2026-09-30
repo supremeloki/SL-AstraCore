@@ -4,6 +4,13 @@ from astra.models.task_analysis import TaskType
 
 logger = get_logger("astra.context.ranking")
 
+# Reading and tokenising every source file is the expensive part of scoring, and
+# the answer only changes when the file does. Cached by path for the process,
+# because the KnowledgeGraph is rebuilt per query and its node objects are
+# thrown away each time.
+_SOURCE_TERMS_CACHE: dict = {}
+_SOURCE_TERMS_CACHE_LIMIT = 4096
+
 # Node types that describe the repo rather than its code.
 _ANALYTIC_TYPES = (NodeType.PATTERN, NodeType.CONFLICT, NodeType.DECISION)
 
@@ -29,12 +36,22 @@ def _is_test_file(node) -> bool:
 
 
 class Ranking:
-    def __init__(self, knowledge_graph):
+    def __init__(self, knowledge_graph, document_frequency=None, files_indexed=None):
         self._kg = knowledge_graph
         self._adj = {}
         self._reverse_adj = {}
         self._build()
-        self._document_frequency = self._compute_document_frequency()
+        if document_frequency is not None:
+            self._document_frequency = document_frequency
+            self._files_indexed = files_indexed or 1
+        else:
+            self._document_frequency = self._compute_document_frequency()
+            self._files_indexed = self._count_files()
+
+    def _count_files(self) -> int:
+        return sum(
+            1 for n in self._kg.node_index.values() if n.node_type == NodeType.FILE
+        ) or 1
 
     def _compute_document_frequency(self) -> dict:
         """How many files contain each stem, across the graph.
@@ -43,21 +60,25 @@ class Ranking:
         in the repo won every question simply by containing more distinct
         words than the one that is actually about the subject.
         """
-        frequency: dict = {}
-        total = 0
+        frequency: dict[str, int] = {}
         for node in self._kg.node_index.values():
             if node.node_type != NodeType.FILE:
                 continue
-            terms = node.properties.get("source_terms")
-            if terms is None:
-                terms = self._source_terms_of(node)
+            terms = self._source_terms_of(node)
             if not terms:
                 continue
-            total += 1
             for stem in {t[:6] for t in terms}:
                 frequency[stem] = frequency.get(stem, 0) + 1
-        self._files_indexed = total or 1
         return frequency
+
+    def carried_over(self) -> tuple:
+        """The document frequency, for reuse when this Ranking is replaced.
+
+        The orchestrator rebuilds the KnowledgeGraph for every query, and
+        recomputing the counts re-walked 200 files each time, which is what
+        turned a 120ms query into a second.
+        """
+        return self._document_frequency, self._files_indexed
 
     def _idf(self, stem: str) -> float:
         """Inverse document frequency, floored so a unique word is not infinite."""
@@ -225,9 +246,7 @@ class Ranking:
             return 0.0
         total = sum(1.0 + min(len(t), 12) / 12.0 for t in wanted)
 
-        source_terms = node.properties.get("source_terms")
-        if source_terms is None:
-            source_terms = Ranking._source_terms_of(node)
+        source_terms = Ranking._source_terms_of(node)
         if source_terms:
             # Coverage of the query, not raw hit count: a 600-line module has
             # more distinct words than a 40-line one, so counting hits made the
@@ -276,10 +295,17 @@ class Ranking:
         path = str(node.metadata.get("file_path", "") or node.properties.get("file_path", ""))
         if not path or node.node_type != NodeType.FILE:
             return set()
+        cached = _SOURCE_TERMS_CACHE.get(path)
+        if cached is not None:
+            return cached
         from astra.context.file_terms import file_terms
 
         terms = file_terms(path)
-        node.properties["source_terms"] = terms
+        if len(_SOURCE_TERMS_CACHE) >= _SOURCE_TERMS_CACHE_LIMIT:
+            # A runaway indexer should not grow this without bound; the cost of
+            # recomputing is a file read, not a correctness problem.
+            _SOURCE_TERMS_CACHE.clear()
+        _SOURCE_TERMS_CACHE[path] = terms
         return terms
 
     def rank(self, node_ids, task_analysis=None, terms=None):

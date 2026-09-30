@@ -11,11 +11,15 @@ logger = get_logger("astra.context.context_engine")
 
 
 class ContextEngine:
-    def __init__(self, knowledge_graph):
+    def __init__(self, knowledge_graph, document_frequency=None, files_indexed=None):
         self._kg = knowledge_graph
         self._task_analyzer = TaskAnalyzer()
         self._graph_query = GraphQuery(knowledge_graph)
-        self._ranking = Ranking(knowledge_graph)
+        self._ranking = Ranking(
+            knowledge_graph,
+            document_frequency=document_frequency,
+            files_indexed=files_indexed,
+        )
         self._token_budget = TokenBudget()
         self._strategy_engine = StrategyEngine()
         self._selector = ContextSelector(self._graph_query, self._ranking)
