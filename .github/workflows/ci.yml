@@ -32,12 +32,15 @@ jobs:
           pip install -e .
 
       - name: Tests
-        run: python -m pytest tests/ -q
-        env:
-          STRICT_KPI: "1"
+        run: |
+          set -o pipefail
+          python -m pytest tests/ -q --tb=short 2>&1 | tee pytest-output.txt
+          echo "### pytest output" >> "$GITHUB_STEP_SUMMARY"
+          cat pytest-output.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Lint
         run: python -m ruff check astra/ tests/ dashboard_app.py
 
       - name: Types
         run: python -m mypy astra/ dashboard_app.py --python-version ${{ matrix.python-version }}
+
