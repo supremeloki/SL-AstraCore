@@ -61,7 +61,7 @@ jobs:
           # gh ships with the hosted runners but not with self-hosted ones;
           # the artifact below carries the same text either way.
           command -v gh >/dev/null 2>&1 || echo "note: gh is not installed, skipping the issue" >&2
-          python -m pytest tests/ -q --tb=long -x > failure.txt 2>&1
+          python -m pytest tests/ -q --tb=long -rfE > failure.txt 2>&1
           python -m ruff check astra/ tests/ dashboard_app.py >> failure.txt 2>&1
           python -m mypy astra/ dashboard_app.py --python-version "$PY_VERSION" >> failure.txt 2>&1
           {
