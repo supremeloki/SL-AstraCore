@@ -491,7 +491,6 @@ async def patch_apply(payload: Optional[dict] = None):
 async def patch_analyze(payload: Optional[dict] = None):
     """Analyze patch impact: AST diff, dependency impact, risk score, confidence."""
     import os
-    import ast
     payload = payload or {}
     path = payload.get("path", "")
     file_path = payload.get("file_path", "")
@@ -499,29 +498,27 @@ async def patch_analyze(payload: Optional[dict] = None):
     new_text = payload.get("new_text", "")
     root = str(Path(path).resolve())
     fp = os.path.join(root, file_path) if file_path and not os.path.isabs(file_path) else file_path
+    # Confine first, outside the try: this is the security check, and wrapping
+    # it meant a failure inside it came back as an ordinary {"status": "error"}
+    # that looked identical to a bad request.
+    fp = _confine_to_registered_repo(fp)
     try:
-        fp = _confine_to_registered_repo(fp)
         with open(fp, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
 
         # Parse AST for semantic analysis
+        from astra.patch.analyzer import diff_ast, score_risk
+
+        new_content = content.replace(old_text, new_text, 1) if old_text else content
         try:
-            old_ast = ast.parse(content)
-            new_content = content.replace(old_text, new_text, 1) if old_text else content
-            new_ast = ast.parse(new_content)
+            report = score_risk(diff_ast(content, new_content))
         except SyntaxError:
             return {"status": "error", "message": "Invalid Python syntax in patch"}
-
-        # Compute AST diff
-        old_nodes = {n for n in ast.walk(old_ast) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
-        new_nodes = {n for n in ast.walk(new_ast) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
-
-        old_names = {n.name for n in old_nodes}
-        new_names = {n.name for n in new_nodes}
-
-        added = new_names - old_names
-        removed = old_names - new_names
-        modified = old_names & new_names
+        added, removed, modified = (
+            report.ast_diff.added,
+            report.ast_diff.removed,
+            report.ast_diff.modified,
+        )
 
         # Load graph for dependency impact
         from astra.storage.backend import StorageProvider
@@ -546,14 +543,7 @@ async def patch_analyze(payload: Optional[dict] = None):
                 storage.close()
 
         # Risk scoring
-        risk = 0
-        risk += len(removed) * 10  # Breaking changes
-        risk += len(modified) * 3  # Modifications
-        risk += dep_impact["downstream"] * 2  # Downstream impact
-        risk += len(added) * 1  # New symbols (lower risk)
-
-        # Confidence: high if small change, low if many dependencies
-        confidence = max(0.1, 1.0 - (risk / 100))
+        report = score_risk(diff_ast(content, new_content), downstream=dep_impact["downstream"])
 
         # Semantic diff output
         diff_lines = []
@@ -570,9 +560,9 @@ async def patch_analyze(payload: Optional[dict] = None):
                 "modified_symbols": list(modified),
             },
             "dependency_impact": dep_impact,
-            "risk_score": min(100, risk),
-            "confidence": round(confidence, 2),
-            "risk_level": "high" if risk > 50 else "medium" if risk > 20 else "low",
+            "risk_score": report.score,
+            "confidence": report.confidence,
+            "risk_level": report.level,
             "diff_preview": diff_lines,
         }
     except Exception as e:
