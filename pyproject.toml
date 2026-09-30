@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [project.scripts]
-astra = "astra.cli:main"
+astra = "astra.cli:console_main"
 
 # dashboard_app.py, dashboard_real.html and static/ are loaded by path at
 # runtime (Path(__file__).parent), so they must ship alongside the package for

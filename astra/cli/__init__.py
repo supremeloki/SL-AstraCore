@@ -75,3 +75,13 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def console_main() -> None:
+    """The entry point the console script calls.
+
+    setuptools calls the target and discards its return value, so a function
+    returning 1 for a failed index left `astra index /bad/path` exiting 0 — a
+    shell script wrapping the CLI could not tell success from failure.
+    """
+    raise SystemExit(main())
