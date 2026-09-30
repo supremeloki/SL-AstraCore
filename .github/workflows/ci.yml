@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -35,6 +39,18 @@ jobs:
         run: python -m pytest tests/ -q --tb=short
         env:
           STRICT_KPI: "1"
+
+      # The job-log endpoint is not readable with the token available here, so a
+      # red build is undiagnosable. Publish the failure into a job output, which
+      # the checks API does expose.
+      - name: Diagnose failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          python -m pytest tests/ -q --tb=short -x > failure.txt 2>&1
+          echo "exit=$?" >> failure.txt
+          tail -c 60000 failure.txt
 
       - name: Lint
         run: python -m ruff check astra/ tests/ dashboard_app.py
