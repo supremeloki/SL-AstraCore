@@ -458,20 +458,35 @@ class RuntimeOrchestrator:
         snippet_chars = max(0, snippet_allowance * 4)
         spent = 0
         nodes_with_snippets: list[ContextNodeRef] = []
-        for n in _pack.relevant_nodes:
-            if not isinstance(n, dict):
-                continue
+        # Spend the snippet budget on the best matches first. relevant_nodes
+        # arrives in set order, so the budget was going to whichever node
+        # happened to be iterated first and the strongest matches came back
+        # with an empty snippet.
+        ordered = sorted(
+            (entry for entry in _pack.relevant_nodes if isinstance(entry, dict)),
+            key=lambda entry: float(entry.get("relevance", 0.0)),
+            reverse=True,
+        )
+        for entry in ordered:
             remaining = snippet_chars - spent
-            snippet = _snippet_for(n, char_limit=remaining) if remaining > 200 else ""
+            # Cap per node. Without it the first few matches each took the whole
+            # remaining allowance and the budget ran out at rank 19, so a file
+            # ranked 20th arrived in the pack with no source at all.
+            per_node = min(remaining, _SNIPPET_PER_NODE_CHARS)
+            snippet = _snippet_for(entry, char_limit=per_node) if per_node > 200 else ""
             spent += len(snippet)
             nodes_with_snippets.append(
                 ContextNodeRef(
-                    node_id=n["id"],
-                    node_type=_ir_node_type(n["id"]) if n["id"] in kg.node_index else NodeType.FILE,
-                    name=n.get("label", ""),
-                    file_path=_file_path_of(n),
+                    node_id=entry["id"],
+                    node_type=(
+                        _ir_node_type(entry["id"])
+                        if entry["id"] in kg.node_index
+                        else NodeType.FILE
+                    ),
+                    name=entry.get("label", ""),
+                    file_path=_file_path_of(entry),
                     snippet=snippet,
-                    relevance_score=float(n.get("relevance", 1.0)),
+                    relevance_score=float(entry.get("relevance", 1.0)),
                 )
             )
         nodes_ref = tuple(nodes_with_snippets)
@@ -605,6 +620,9 @@ class RuntimeOrchestrator:
 
 
 _SNIPPET_MAX_LINES = 40
+# ~600 tokens of source per node: enough for a function body, small enough
+# that 30 nodes still fit a 4k budget.
+_SNIPPET_PER_NODE_CHARS = 2400
 _DEFAULT_TOKEN_BUDGET = 32000
 _SYMBOL_KIND_TO_NODE_TYPE = {
     SymbolKind.FUNCTION: NodeType.FUNCTION,

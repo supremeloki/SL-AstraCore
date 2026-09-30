@@ -12,6 +12,22 @@ _ANALYTIC_TYPES = (NodeType.PATTERN, NodeType.CONFLICT, NodeType.DECISION)
 _TYPE_WEIGHT_CACHE: dict = {}
 
 
+def _degree(count: int) -> float:
+    """log1p so a hub with 178 edges is not 30x a file with 6."""
+    import math
+
+    return math.log1p(count)
+
+
+def _is_test_file(node) -> bool:
+    path = str(node.metadata.get("file_path", "") or node.properties.get("file_path", ""))
+    name = path.replace("\\", "/").rsplit("/", 1)[-1]
+    stem = name[:-3] if name.endswith(".py") else name
+    # Match on the stem, not the suffix: endswith("test.py") also matched
+    # contest.py and attestation.py.
+    return stem.startswith("test_") or stem.endswith("_test")
+
+
 class Ranking:
     def __init__(self, knowledge_graph):
         self._kg = knowledge_graph
@@ -50,8 +66,17 @@ class Ranking:
 
         structural = 0.0
         structural += node.confidence * 1.5
-        structural += self._adj.get(node_id, 0) * 0.3
-        structural += self._reverse_adj.get(node_id, 0) * 0.4
+        # Degree is logarithmic and capped. Linear weighting made one hub file
+        # unbeatable: models.py has 88 edges and 0.4 each is 35 points, which
+        # no amount of text matching could overcome, so it came first for every
+        # question regardless of the question.
+        structural += min(_degree(self._adj.get(node_id, 0)), 6.0) * 0.5
+        structural += min(_degree(self._reverse_adj.get(node_id, 0)), 6.0) * 0.6
+        if _is_test_file(node):
+            # A test that exercises the answer is not the answer. An agent
+            # reading a context pack needs the implementation; the test ranks
+            # above it purely because its name repeats the query words.
+            structural *= 0.25
         if node.is_orphan:
             structural *= 0.3
         risk = node.properties.get("risk", "low")
@@ -66,7 +91,12 @@ class Ranking:
         score += structural_scale * structural
 
         if node_type == NodeType.FILE:
-            score += 0.5
+            # A file is the unit an agent navigates by. Prefer it over the
+            # symbols inside other files that merely share a word with the
+            # query: given "what resolves imports", the answer is
+            # import_resolver.py, not whichever helper happens to be called
+            # find_imports.
+            score += 2.0
         elif node_type == NodeType.CLASS:
             score += 0.7
         elif node_type == NodeType.FUNCTION:

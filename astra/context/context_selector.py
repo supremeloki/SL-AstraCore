@@ -19,18 +19,25 @@ class ContextSelector:
 
         relevant = set(seeds)
         max_nodes = strategy.get("max_nodes", 30)
+        # The graph walk has its own budget, separate from the output cap.
+        # Sharing one counter meant the first two seeds filled all 30 slots with
+        # their neighbours, so every later keyword match was discarded before it
+        # could be ranked — a query naming config.py never saw config.py.
+        walk_budget = max(max_nodes, int(max_nodes * 4))
 
         for seed in seeds:
             upstream = self._gq.upstream(seed, strategy.get("depth_upstream", 2))
             for nid, _, _ in upstream:
                 relevant.add(nid)
-                if len(relevant) >= max_nodes:
+                if len(relevant) >= walk_budget:
                     break
             downstream = self._gq.downstream(seed, strategy.get("depth_downstream", 2))
             for nid, _, _ in downstream:
                 relevant.add(nid)
-                if len(relevant) >= max_nodes:
+                if len(relevant) >= walk_budget:
                     break
+            if len(relevant) >= walk_budget:
+                break
 
         if strategy.get("include_config"):
             relevant.update(self._collect_configs())
