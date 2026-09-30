@@ -25,6 +25,9 @@ _DEFAULTS = {
 }
 
 
+_MISSING = object()
+
+
 class Config:
     def __init__(self, path=None):
         self._raw = {}
@@ -87,8 +90,13 @@ class Config:
             if isinstance(node, dict) and k in node:
                 node = node[k]
             else:
-                keys_remaining = ".".join(keys[keys.index(k):])
-                return self._default_get(keys_remaining, default)
+                # A section named in the file replaces that whole default
+                # section, so a sibling the file never mentioned has to fall
+                # back to the default tree — looked up from the root, not from
+                # the segment that was missing, or "scanner.hash_algorithm"
+                # would search for a top-level "hash_algorithm".
+                fallback = self._default_get(key, _MISSING)
+                return default if fallback is _MISSING else fallback
         return node
 
     def _default_get(self, key, default):
