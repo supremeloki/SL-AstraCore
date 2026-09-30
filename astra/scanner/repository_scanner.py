@@ -37,8 +37,9 @@ class RepositoryScanner:
         self._checkpoint_path = self._cfg("scanner.checkpoint_path", "")
         self._checkpoint_every = self._cfg("scanner.checkpoint_every", 1000)
         self._worker_count = max(1, int(self._cfg("scanner.worker_count", 1)))
+        self._respect_astraignore = bool(self._cfg("scanner.respect_astraignore", True))
 
-        self._ignore = IgnoreEngine(self._root)
+        self._ignore = IgnoreEngine(self._root, respect_astraignore=self._respect_astraignore)
         self._detector = LanguageDetector()
         self._binary = BinaryDetector()
         self._hasher = HashEngine(self._hash_algorithm, self._streaming_buffer)

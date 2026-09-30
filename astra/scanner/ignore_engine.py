@@ -7,12 +7,13 @@ logger = get_logger("astra.scanner.ignore_engine")
 
 
 class IgnoreEngine:
-    def __init__(self, root_path):
+    def __init__(self, root_path, respect_astraignore: bool = True):
         self._root = root_path
         self._dir_patterns = set(DEFAULT_IGNORE_DIRS)
         self._ext_patterns = set(DEFAULT_IGNORE_EXTENSIONS)
-        self._custom_patterns = []
-        self._load_astraignore()
+        self._custom_patterns: list[str] = []
+        if respect_astraignore:
+            self._load_astraignore()
 
     def _load_astraignore(self):
         ignore_path = os.path.join(self._root, ".astraignore")

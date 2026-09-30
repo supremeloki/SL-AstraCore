@@ -6,8 +6,9 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
+# Only keys the code actually reads. Dead knobs were removed rather than left
+# as decoration: a config key nothing reads is a lie about what is configurable.
 _DEFAULTS = {
-    "project": {"name": "SL-AstraCore", "version": "1.0.0"},
     "scanner": {
         "max_file_size_kb": 1024,
         "follow_symlinks": False,
@@ -19,30 +20,8 @@ _DEFAULTS = {
         "checkpoint_path": "",
         "checkpoint_every": 1000,
     },
-    "parser": {
-        "languages": [
-            "python", "javascript", "typescript", "go", "rust",
-            "java", "c", "cpp", "csharp", "ruby",
-        ],
-        "fallback_on_unknown": True,
-    },
-    "reader": {
-        "line_by_line": True,
-        "preserve_order": True,
-        "max_lines_per_file": 250000,
-    },
-    "vault": {
-        "enabled": True,
-        "detect_frontmatter": True,
-        "parse_wikilinks": True,
-        "parse_tags": True,
-    },
-    "storage": {"engine": "duckdb", "cache_engine": "sqlite"},
-    "dashboard": {"host": "0.0.0.0", "port": 8470},
-    "logging": {
-        "level": "INFO",
-        "format": "%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-    },
+    "storage": {"engine": "duckdb"},
+    "agent": {"providers": ["generic"]},
 }
 
 

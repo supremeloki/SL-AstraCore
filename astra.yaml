@@ -1,6 +1,6 @@
-project:
-  name: SL-AstraCore
-  version: "1.0.0"
+# SL-AstraCore configuration.
+# Only keys the code reads are listed here; anything absent falls back to
+# astra/core/config.py _DEFAULTS.
 
 scanner:
   max_file_size_kb: 1024
@@ -13,46 +13,13 @@ scanner:
   checkpoint_path: ""
   checkpoint_every: 1000
 
-parser:
-  languages:
-    - python
-    - javascript
-    - typescript
-    - go
-    - rust
-    - java
-    - c
-    - cpp
-    - csharp
-    - ruby
-  fallback_on_unknown: true
-
-reader:
-  line_by_line: true
-  preserve_order: true
-  max_lines_per_file: 250000
-
-vault:
-  enabled: true
-  detect_frontmatter: true
-  parse_wikilinks: true
-  parse_tags: true
-
 agent:
-  # Task execution providers. generic = echo fallback; codex = real Codex CLI
-  # (skipped when the binary is missing); manual = render a task brief for
-  # human/VS Code execution.
+  # Task execution providers.
+  #   generic - echo fallback (always available)
+  #   codex   - runs the real Codex CLI, skipped when the binary is absent
+  #   manual  - renders a task brief for human / VS Code execution
   providers:
     - generic
 
 storage:
   engine: duckdb
-  cache_engine: sqlite
-
-dashboard:
-  host: 0.0.0.0
-  port: 8470
-
-logging:
-  level: INFO
-  format: "%(asctime)s | %(name)s | %(levelname)s | %(message)s"

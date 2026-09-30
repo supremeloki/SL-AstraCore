@@ -161,10 +161,32 @@ class GraphQueryEngine:
         )
 
     def impact_analysis(self, node_id: str, depth: int = 3) -> QueryResult:
-        """Downstream BFS capped at depth; excludes the seed itself."""
-        result = self.bfs(node_id, max_depth=depth)
-        nodes = tuple(n for n in result.nodes if n.id != node_id)
-        return QueryResult(nodes=nodes, edges=result.edges, count=len(nodes))
+        """Blast radius of editing a node: who *depends* on it, transitively.
+
+        bfs() walks outgoing edges (what this node imports). Impact is the
+        reverse: walk to_node -> from_node so the result is the set of files
+        that would be affected by a change here. Excludes the seed itself.
+        """
+        visited: set[str] = {node_id}
+        queue: deque[tuple[str, int]] = deque([(node_id, 0)])
+        affected: list[IRNode] = []
+        edges: list[IREdge] = []
+
+        while queue:
+            current_id, current_depth = queue.popleft()
+            if current_depth >= depth:
+                continue
+            for edge in self._storage.get_edges(to_node=current_id):
+                if edge.from_node in visited:
+                    continue
+                visited.add(edge.from_node)
+                edges.append(edge)
+                node = self._storage.get_node(edge.from_node)
+                if node:
+                    affected.append(node)
+                queue.append((edge.from_node, current_depth + 1))
+
+        return QueryResult(nodes=tuple(affected), edges=tuple(edges), count=len(affected))
 
     # ── Aggregation ────────────────────────────────────────
 

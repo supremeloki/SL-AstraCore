@@ -32,7 +32,11 @@ class AstraCore:
             context_output = ContextEngine(knowledge_graph).build_pack(task)
             context_pack = context_output[1]
 
-        runtime = RuntimeOrchestrator(knowledge_graph)
+        # RuntimeOrchestrator's first parameter is a parser registry, not a
+        # knowledge graph. Passing the graph bound a KnowledgeGraph where a
+        # ParserRegistry was expected, so any index through this object failed
+        # with an AttributeError on the parse path.
+        runtime = RuntimeOrchestrator()
         runtime_analysis = None
         if context_output:
             runtime_analysis = {

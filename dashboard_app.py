@@ -288,6 +288,46 @@ def graph_node(path: str, node_id: str):
         storage.close()
 
 
+@app.get("/api/graph/impact")
+def graph_impact(path: str, node_id: str, depth: int = 3):
+    """Blast radius of a change: what a node's edit reaches, via BFS over the graph.
+
+    Backed by GraphQueryEngine.impact_analysis, which was written, tested and
+    never reachable from the app.
+    """
+    rec = _get_or_create(path)
+    from astra.graph.query_engine import GraphQueryEngine
+    from astra.storage.backend import StorageProvider
+    storage = StorageProvider(backend=rec.storage_backend, db_path=rec.db_path).create()
+    storage.connect()
+    try:
+        result = GraphQueryEngine(storage).impact_analysis(node_id, depth=depth)
+        return {
+            "node_id": node_id,
+            "depth": depth,
+            "affected": [{"id": n.id, "name": n.name, "type": n.type.name} for n in result.nodes[:60]],
+            "affected_count": len(result.nodes),
+            "edges": [{"from": e.from_node, "to": e.to_node, "type": e.type.name} for e in result.edges[:80]],
+        }
+    finally:
+        storage.close()
+
+
+@app.get("/api/graph/path")
+def graph_path(path: str, from_id: str, to_id: str):
+    """Shortest import path between two nodes, or null when unreachable."""
+    rec = _get_or_create(path)
+    from astra.graph.query_engine import GraphQueryEngine
+    from astra.storage.backend import StorageProvider
+    storage = StorageProvider(backend=rec.storage_backend, db_path=rec.db_path).create()
+    storage.connect()
+    try:
+        route = GraphQueryEngine(storage).shortest_path(from_id, to_id)
+        return {"from": from_id, "to": to_id, "path": route, "length": len(route) - 1 if route else None}
+    finally:
+        storage.close()
+
+
 @app.get("/api/logs")
 def recent_logs(limit: int = 30):
     return [

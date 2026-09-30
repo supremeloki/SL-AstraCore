@@ -10,7 +10,6 @@ coming back without needing a browser in CI.
 from pathlib import Path
 import re
 
-import pytest
 
 SPA = Path(__file__).resolve().parent.parent / "dashboard_real.html"
 SOURCE = SPA.read_text(encoding="utf-8")
