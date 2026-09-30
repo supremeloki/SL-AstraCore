@@ -1,12 +1,36 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
+import types
 from typing import Sequence, Optional
 
 import duckdb
 
 from astra.ir.models import IRNode, IREdge, NodeType, EdgeType
 from astra.storage import sql_base
+
+
+def _silence_duckdb_pandas_probe() -> None:
+    """Stop DuckDB re-scanning sys.path for pandas on every statement.
+
+    DuckDB probes for pandas to support `.df()` on results. When pandas is
+    absent the probe fails, and because the failure is not cached it repeats:
+    92 full-path scans on a 20-file index, 1,136 on a 60-file one, which
+    dominated the run. An empty module in sys.modules satisfies the probe.
+
+    Only done when pandas is genuinely missing, so an installed pandas keeps
+    working for anyone who calls .df().
+    """
+    if "pandas" in sys.modules:
+        return
+    try:
+        if importlib.util.find_spec("pandas") is not None:
+            return
+    except (ImportError, ValueError):
+        return
+    sys.modules["pandas"] = types.ModuleType("pandas")
 
 _NODE_DDL = """
 CREATE TABLE IF NOT EXISTS graph_nodes (
@@ -87,11 +111,18 @@ class DuckDBBackend:
         self._column_cache: dict[str, list[str]] = {}
 
     def connect(self) -> None:
+        _silence_duckdb_pandas_probe()
         self._conn = duckdb.connect(self._db_path)
         self._column_cache.clear()
         _warm_list_cast(self._conn)
         self._conn.execute(_NODE_DDL)
         self._conn.execute(_EDGE_DDL)
+        # One staging table per target, created here rather than per batch.
+        for target in ("graph_nodes", "graph_edges"):
+            self._conn.execute(
+                f"CREATE TEMP TABLE IF NOT EXISTS _astra_batch_{target} "
+                f"AS SELECT * FROM {target} LIMIT 0"
+            )
 
     def close(self) -> None:
         if self._conn:
@@ -226,8 +257,11 @@ class DuckDBBackend:
         # keyed by table name — one per (connection, target) pair. Reusing a
         # single name would leave the node columns in place when edges are
         # written next, and the column count would not match.
+        #
+        # It is created once in connect(). Issuing CREATE ... IF NOT EXISTS on
+        # every batch made DuckDB re-resolve its catalog each time: 19k module
+        # lookups and 95k stat calls on a 60-file tree, which dominated the run.
         staging = f"_astra_batch_{table}"
-        self.conn.execute(f"CREATE TEMP TABLE IF NOT EXISTS {staging} AS SELECT * FROM " + table + " LIMIT 0")
         self.conn.execute(f"DELETE FROM {staging}")
         self.conn.execute(
             f"INSERT INTO {staging} SELECT * FROM (SELECT {unnest_select} FROM (SELECT 1) _) AS batch",
