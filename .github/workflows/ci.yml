@@ -26,7 +26,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio ruff mypy types-PyYAML
+          # httpx2 backs starlette's TestClient on recent FastAPI; without it every
+          # module importing testclient fails at collection.
+          pip install pytest pytest-asyncio ruff mypy types-PyYAML httpx2
           pip install -e .
 
       - name: Tests
