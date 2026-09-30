@@ -34,6 +34,37 @@ class Ranking:
         self._adj = {}
         self._reverse_adj = {}
         self._build()
+        self._document_frequency = self._compute_document_frequency()
+
+    def _compute_document_frequency(self) -> dict:
+        """How many files contain each stem, across the graph.
+
+        A word every file has is not evidence. Without this the biggest module
+        in the repo won every question simply by containing more distinct
+        words than the one that is actually about the subject.
+        """
+        frequency: dict = {}
+        total = 0
+        for node in self._kg.node_index.values():
+            if node.node_type != NodeType.FILE:
+                continue
+            terms = node.properties.get("source_terms")
+            if terms is None:
+                terms = self._source_terms_of(node)
+            if not terms:
+                continue
+            total += 1
+            for stem in {t[:6] for t in terms}:
+                frequency[stem] = frequency.get(stem, 0) + 1
+        self._files_indexed = total or 1
+        return frequency
+
+    def _idf(self, stem: str) -> float:
+        """Inverse document frequency, floored so a unique word is not infinite."""
+        import math
+
+        seen = self._document_frequency.get(stem, 0)
+        return math.log((self._files_indexed + 1) / (seen + 1)) + 1.0
 
     def _build(self):
         from collections import defaultdict
@@ -62,7 +93,13 @@ class Ranking:
             # (degree, confidence, complexity) while a partial text match is
             # worth 15, so a file that actually mentions the query outranks a
             # merely central one instead of tying with it.
-            score += 15.0 * self._text_match(node, terms)
+            match = self._text_match(node, terms)
+            if _is_test_file(node):
+                # A test is *about* the subject, which makes it a better lexical
+                # match than the implementation — so the penalty has to apply to
+                # the text term too, not just the structural part.
+                match *= 0.3
+            score += 15.0 * match
 
         structural = 0.0
         structural += node.confidence * 1.5
@@ -167,20 +204,58 @@ class Ranking:
             },
         }.get(task_type, {})
 
-    @staticmethod
-    def _text_match(node, terms) -> float:
-        """Fraction of query terms present in the node's own text.
+    def _text_match(self, node, terms) -> float:
+        """Fraction of query terms the node's own text accounts for.
 
-        A term counts as a hit anywhere in the haystack (name, path, or the
-        property values), so "staging" matches a file called duckdb_backend.py
-        only if the word is actually recorded on it — not because the file is
-        central. Weighted by term length so a rare word outranks a common one.
+        Three sources, in descending order of authority:
+          1. the file's own vocabulary, from its source (cached on the node),
+          2. its name and path,
+          3. analytic property values.
+
+        Source text matters because a graph node records only a path, a
+        language and a size: without the body, "what resolves imports between
+        files" cannot tell import_resolver.py from any other module, since
+        only one of them ever says `resolve`.
         """
+        if not terms:
+            return 0.0
+
+        wanted = [t for t in terms if t]
+        if not wanted:
+            return 0.0
+        total = sum(1.0 + min(len(t), 12) / 12.0 for t in wanted)
+
+        source_terms = node.properties.get("source_terms")
+        if source_terms is None:
+            source_terms = Ranking._source_terms_of(node)
+        if source_terms:
+            # Coverage of the query, not raw hit count: a 600-line module has
+            # more distinct words than a 40-line one, so counting hits made the
+            # largest file win every question. Density is capped so a file that
+            # is *about* the subject can still outrank one that merely mentions
+            # the words in passing.
+            #
+            # Matching is on word stems, not whole words: a question says
+            # "resolves" and the code says "resolve_imports", and an exact
+            # comparison scored that as no match at all. The stems are indexed
+            # once per file so this stays linear rather than quadratic.
+            stems = {s[:6] for s in source_terms}
+            # Weight each hit by how rare that word is across the repo. A word
+            # in every file counts for little; a word in one file counts a lot.
+            weighted = 0.0
+            maximum = 0.0
+            for term in wanted:
+                stem = term[:6]
+                maximum += self._idf(stem)
+                if stem in stems:
+                    weighted += self._idf(stem)
+            if maximum <= 0:
+                return 0.0
+            return min(1.0, weighted / maximum)
+
         haystack = " ".join(
             [
                 node.label or "",
-                # file_path is recorded in metadata by the indexer, not in
-                # properties — reading only properties matched nothing.
                 str(node.metadata.get("file_path", "")),
                 str(node.properties.get("file_path", "")),
             ]
@@ -193,13 +268,19 @@ class Ranking:
         ).lower()
         if not haystack:
             return 0.0
-        hits = 0.0
-        for term in terms:
-            if not term:
-                continue
-            if term in haystack:
-                hits += 1.0 + min(len(term), 12) / 12.0
-        return hits / max(sum(1.0 + min(len(t), 12) / 12.0 for t in terms if t), 1e-9)
+        hits = sum(1.0 + min(len(t), 12) / 12.0 for t in wanted if t in haystack)
+        return hits / total
+
+    @staticmethod
+    def _source_terms_of(node) -> set:
+        path = str(node.metadata.get("file_path", "") or node.properties.get("file_path", ""))
+        if not path or node.node_type != NodeType.FILE:
+            return set()
+        from astra.context.file_terms import file_terms
+
+        terms = file_terms(path)
+        node.properties["source_terms"] = terms
+        return terms
 
     def rank(self, node_ids, task_analysis=None, terms=None):
         scored = [(nid, self.score(nid, task_analysis, terms)) for nid in node_ids]

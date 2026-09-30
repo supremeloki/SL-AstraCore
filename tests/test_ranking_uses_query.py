@@ -31,6 +31,8 @@ def _ranking(nodes, edges=()):
     for edge in edges:
         ranking._adj[edge.from_node] = ranking._adj.get(edge.from_node, 0) + 1
         ranking._reverse_adj[edge.to_node] = ranking._reverse_adj.get(edge.to_node, 0) + 1
+    ranking._files_indexed = max(len(nodes), 1)
+    ranking._document_frequency = {}
     return ranking
 
 

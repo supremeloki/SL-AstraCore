@@ -35,6 +35,8 @@ def _ranking(nodes, edges=()) -> Ranking:
     for edge in edges:
         ranking._adj[edge.from_node] = ranking._adj.get(edge.from_node, 0) + 1
         ranking._reverse_adj[edge.to_node] = ranking._reverse_adj.get(edge.to_node, 0) + 1
+    ranking._files_indexed = max(len(nodes), 1)
+    ranking._document_frequency = {}
     return ranking
 
 
@@ -83,15 +85,17 @@ def test_file_path_counts_as_matchable_text():
     matched nothing and silently disabled the whole term."""
     node = _node("file:x", "helper.py")
     node.metadata = {"file_path": "src/payments/stripe_client.py"}
-    assert Ranking._text_match(node, ["stripe"]) > 0
-    assert Ranking._text_match(node, ["kubernetes"]) == 0
+    ranking = _ranking([node])
+    assert ranking._text_match(node, ["stripe"]) > 0
+    assert ranking._text_match(node, ["kubernetes"]) == 0
 
 
 def test_text_match_is_proportional_to_coverage():
     logging.disable(logging.CRITICAL)
     node = _node("file:x", "auth_token_guard.py")
-    one = Ranking._text_match(node, ["auth", "kubernetes", "terraform"])
-    two = Ranking._text_match(node, ["auth", "token"])
+    ranking = _ranking([node])
+    one = ranking._text_match(node, ["auth", "kubernetes", "terraform"])
+    two = ranking._text_match(node, ["auth", "token"])
     assert two > one, "matching more of the query should score higher"
 
 

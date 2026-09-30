@@ -26,6 +26,7 @@ from astra.storage.backend import StorageBackend
 from astra.parser.registry import build_default_parser_registry, ParserRegistry
 from astra.resolver.import_resolver import resolve_imports_into_edges
 from astra.runtime.models import RepoRecord, RepoStatus
+from astra.runtime.repo_lock import file_lock
 from astra.storage.backend import StorageProvider
 from astra.context.engine import ContextEngine
 
@@ -104,7 +105,10 @@ class RuntimeOrchestrator:
         if record is None:
             raise ValueError(f"Repository not registered: {root_path}")
 
-        with self._lock_for(root_path):
+        # Both locks: the threading.Lock serialises threads in this process,
+        # the file lock serialises processes. DuckDB's own lock is per-process,
+        # so two servers or a server and a CLI run both need the file.
+        with self._lock_for(root_path), file_lock(record.db_path):
             return self._index_locked(record, file_extensions)
 
     def _index_locked(
@@ -340,7 +344,7 @@ class RuntimeOrchestrator:
         """
         record = self._get_record(root_path)
 
-        with self._lock_for(root_path):
+        with self._lock_for(root_path), file_lock(record.db_path):
             # Re-read the status now that the writer has released: a query that
             # arrived mid-index used to fail outright instead of reading the
             # graph the index just wrote.

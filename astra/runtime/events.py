@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Optional
@@ -38,9 +39,11 @@ class EventStream:
     Subscribers receive events in order. Thread-safe for append.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, max_history: int = 1000) -> None:
         self._subscribers: list[Callable[[ExecutionEvent], None]] = []
-        self._history: list[ExecutionEvent] = []
+        # Bounded for the same reason EventBus is: a long session appended
+        # forever and every replay copied the whole thing.
+        self._history: deque[ExecutionEvent] = deque(maxlen=max_history)
 
     def subscribe(self, callback: Callable[[ExecutionEvent], None]) -> None:
         self._subscribers.append(callback)
