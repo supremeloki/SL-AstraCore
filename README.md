@@ -57,14 +57,20 @@ docker compose up --build     # dashboard on http://localhost:8780
 ## Quick start
 
 ```bash
-# 1. launch the observatory
-python dashboard_app.py       # → http://localhost:8780
+# 1. launch the observatory — it prints a URL containing a one-time token
+python dashboard_app.py
+#   Open  http://127.0.0.1:8780/?token=...
 
-# 2. add a repository from the UI ("Add repository"), or use the CLI:
+# 2. add a repository from the UI, or use the CLI:
 astra index F:\path\to\repo
 astra context F:\path\to\repo "how does authentication work"
 astra serve --port 8780
 ```
+
+The dashboard mints an access token at startup and requires it on every API
+call, so a page open in the same browser cannot drive it. Pin the token with
+`ASTRA_TOKEN=...`, or set `ASTRA_DISABLE_AUTH=1` on a trusted single-user
+machine to opt out.
 
 Repository data lives in `~/.astra` (override with the `ASTRA_HOME` environment
 variable). Each repo gets its own deterministic graph database.
@@ -134,8 +140,11 @@ hygiene); the findings that mattered were fixed, and the rest are noted below.
 
 Deliberate, not accidental:
 
-- **Single-user, no authentication.** The dashboard is a local tool; it refuses
-  cross-origin requests but assumes a trusted host.
+- **Single-user access control.** The dashboard is protected by a per-process
+  token, not by accounts or roles: anyone who can read the URL can use it, and
+  the server binds all interfaces so it is reachable from other machines on the
+  network. Set `ASTRA_TOKEN` to pin the token; there is no TLS, so do not expose
+  it beyond a trusted network.
 - **Phase 5/7 are opt-in.** `ToolRegistry` / `ValidationEngine` /
   `RecoveryEngine` are declared protocols with no implementation, and the
   agent providers are reachable from the library and CLI rather than wired into
