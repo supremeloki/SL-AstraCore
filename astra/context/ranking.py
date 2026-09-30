@@ -7,6 +7,10 @@ logger = get_logger("astra.context.ranking")
 # Node types that describe the repo rather than its code.
 _ANALYTIC_TYPES = (NodeType.PATTERN, NodeType.CONFLICT, NodeType.DECISION)
 
+# The weight table depends only on the task type, never on the node, so it is
+# safe to share across Ranking instances.
+_TYPE_WEIGHT_CACHE: dict = {}
+
 
 class Ranking:
     def __init__(self, knowledge_graph):
@@ -76,6 +80,16 @@ class Ranking:
         return round(score, 3)
 
     def _type_weights(self, task_type):
+        # Built once per task type, not once per candidate node: this dict
+        # holds a dozen entries and ranking 43 nodes was rebuilding it 43 times.
+        cached = _TYPE_WEIGHT_CACHE.get(task_type)
+        if cached is not None:
+            return cached
+        weights = self._build_type_weights(task_type)
+        _TYPE_WEIGHT_CACHE[task_type] = weights
+        return weights
+
+    def _build_type_weights(self, task_type):
         return {
             TaskType.BUG_FIX: {
                 NodeType.FILE: 1.5,
