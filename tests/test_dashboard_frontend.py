@@ -104,7 +104,14 @@ def test_tree_is_keyboard_navigable():
     assert 'tabindex="0"' in _body_of("buildTree"), "tree items are not focusable"
     assert 'role="treeitem"' in _body_of("buildTree")
     assert "ArrowDown" in SOURCE and "ArrowUp" in SOURCE, "no arrow-key navigation in the tree"
-    assert "tabindex" in SOURCE.split("keydown", 1)[-1][:400] or "tree-item" in SOURCE
+    # The old check sliced a fixed 400 characters after the first "keydown" and
+    # OR-ed it against a substring test, so it either passed for any edit or
+    # broke on a CRLF checkout. Assert the arrow handler actually moves focus.
+    arrow_handler = re.search(
+        r"addEventListener\(\s*'keydown'.*?ArrowDown(.*?)\}\)", SOURCE, re.S
+    )
+    assert arrow_handler, "no arrow-key handler found"
+    assert ".focus()" in arrow_handler.group(1), "the arrow keys never move focus"
 
 
 def test_modal_manages_focus():

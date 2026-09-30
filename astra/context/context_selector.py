@@ -36,7 +36,12 @@ class ContextSelector:
             relevant.update(self._collect_configs())
 
         relevant_list = list(relevant)
-        ranked = self._ranking.rank(relevant_list, task_analysis)
+        # The query's own words go into the ranking. Without them the score was
+        # purely structural — confidence, degree, risk, complexity — so the pack
+        # was ordered by how central a file is in the repo, not by whether it
+        # had anything to do with the question.
+        terms = [str(k).lower() for k in (getattr(task_analysis, "keywords", None) or [])]
+        ranked = self._ranking.rank(relevant_list, task_analysis, terms or None)
         # The score is kept, not just the order: the orchestrator reports it as
         # relevance_score, and it defaults to 1.0 when absent — which made every
         # node look equally relevant downstream.
