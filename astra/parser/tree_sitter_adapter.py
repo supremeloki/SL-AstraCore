@@ -58,13 +58,27 @@ _LANG_EXTENSIONS = {
 }
 
 
+_PARSER_CACHE: dict = {}
+
+
 def _get_parser(language: str):
+    """A parser for `language`, or None if it cannot be built.
+
+    Memoized on both outcomes. tree_sitter_language_pack downloads a grammar
+    on first use and, with no HOME or XDG_CACHE_HOME to cache it in, that
+    raises on every call — so an unmapped language cost a failed download per
+    file, per query. A None result is the same answer every time.
+    """
+    if language in _PARSER_CACHE:
+        return _PARSER_CACHE[language]
     try:
         from typing import cast
         from tree_sitter_language_pack import get_parser, SupportedLanguage
-        return get_parser(cast(SupportedLanguage, language))
+        parser = get_parser(cast(SupportedLanguage, language))
     except Exception:
-        return None
+        parser = None
+    _PARSER_CACHE[language] = parser
+    return parser
 
 
 def _find_name(node, source: str) -> str:
