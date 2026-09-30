@@ -537,23 +537,39 @@ class RuntimeOrchestrator:
         ignore_prefixes = tuple(r + "/" for r in gitignore_rules if "/" in r)
 
         files = []
-        for path in root.rglob("*"):
-            if path.is_dir():
+        # os.scandir reports is_dir()/is_file() from the directory entry, so no
+        # extra stat per path. Path.rglob("*") followed by is_dir() cost one
+        # stat per candidate — 20k of them on an 80-file tree, because every
+        # directory was visited and then re-queried.
+        stack = [root]
+        while stack:
+            current = stack.pop()
+            try:
+                entries = list(os.scandir(current))
+            except OSError:
                 continue
-            rel = path.relative_to(root)
-            rel_str = str(rel).replace("\\", "/")
-            parts = rel.parts
-            if any(p.startswith(".") and p not in (".gitignore",) for p in parts):
-                continue
-            if any(p in ignore_names for p in parts):
-                continue
-            if ignore_suffixes and rel_str.endswith(ignore_suffixes):
-                continue
-            if any(rel_str.startswith(prefix) for prefix in ignore_prefixes):
-                continue
-            if file_extensions and not any(str(path).endswith(ext) for ext in file_extensions):
-                continue
-            files.append(str(path))
+            for entry in entries:
+                name = entry.name
+                if name.startswith(".") and name != ".gitignore":
+                    continue
+                if name in ignore_names:
+                    continue
+                try:
+                    is_dir = entry.is_dir()
+                except OSError:
+                    continue
+                rel = os.path.relpath(entry.path, root).replace("\\", "/")
+                if is_dir:
+                    if not any(rel == p or rel.startswith(p) for p in ignore_prefixes):
+                        stack.append(Path(entry.path))
+                    continue
+                if ignore_suffixes and rel.endswith(ignore_suffixes):
+                    continue
+                if any(rel.startswith(prefix) for prefix in ignore_prefixes):
+                    continue
+                if file_extensions and not rel.endswith(tuple(file_extensions)):
+                    continue
+                files.append(entry.path)
 
         return sorted(files)
 

@@ -5,6 +5,7 @@ import sqlite3
 from typing import Sequence, Optional
 
 from astra.ir.models import IRNode, IREdge, NodeType, EdgeType
+from astra.storage import sql_base
 
 _NODE_DDL = """
 CREATE TABLE IF NOT EXISTS graph_nodes (
@@ -112,8 +113,7 @@ class SQLiteBackend:
         )
 
     def get_all_nodes(self) -> Sequence[IRNode]:
-        cur = self.conn.execute("SELECT * FROM graph_nodes")
-        return [_node_from_row(r) for r in cur.fetchall()]
+        return sql_base.get_all_nodes(self)
 
     def add_edge(self, edge: IREdge) -> None:
         self.conn.execute(
@@ -151,44 +151,28 @@ class SQLiteBackend:
         )
 
     def get_all_edges(self) -> Sequence[IREdge]:
-        cur = self.conn.execute("SELECT * FROM graph_edges")
-        return [_edge_from_row(r) for r in cur.fetchall()]
+        return sql_base.get_all_edges(self)
 
     def get_nodes_by_type(self, node_type: NodeType) -> Sequence[IRNode]:
-        cur = self.conn.execute(
-            "SELECT * FROM graph_nodes WHERE type = ?", [node_type.name]
-        )
-        return [_node_from_row(r) for r in cur.fetchall()]
+        return sql_base.get_nodes_by_type(self, node_type)
 
     def get_nodes_by_source(self, source: str) -> Sequence[IRNode]:
-        cur = self.conn.execute(
-            "SELECT * FROM graph_nodes WHERE source = ?", [source]
-        )
-        return [_node_from_row(r) for r in cur.fetchall()]
+        return sql_base.get_nodes_by_source(self, source)
 
     def search_nodes_by_name(self, name_substring: str) -> Sequence[IRNode]:
-        escaped = name_substring.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        cur = self.conn.execute(
-            "SELECT * FROM graph_nodes WHERE name LIKE ? ESCAPE '\\'",
-            [f"%{escaped}%"],
-        )
-        return [_node_from_row(r) for r in cur.fetchall()]
+        return sql_base.search_nodes_by_name(self, name_substring)
 
     def get_node_ids(self) -> set[str]:
-        cur = self.conn.execute("SELECT id FROM graph_nodes")
-        return {r[0] for r in cur.fetchall()}
+        return sql_base.get_node_ids(self)
 
     def get_edge_keys(self) -> set[tuple[str, str, str]]:
-        cur = self.conn.execute(
-            "SELECT from_node, to_node, type FROM graph_edges"
-        )
-        return {(r[0], r[1], r[2]) for r in cur.fetchall()}
+        return sql_base.get_edge_keys(self)
 
     def node_count(self) -> int:
-        return self.conn.execute("SELECT COUNT(*) FROM graph_nodes").fetchone()[0]
+        return sql_base.node_count(self)
 
     def edge_count(self) -> int:
-        return self.conn.execute("SELECT COUNT(*) FROM graph_edges").fetchone()[0]
+        return sql_base.edge_count(self)
 
     # Batch operations (Phase 2 hardened)
     def add_nodes(self, nodes: Sequence[IRNode]) -> None:
