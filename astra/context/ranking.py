@@ -322,6 +322,11 @@ class Ranking:
         "rank" and the other two words are what ranking is for. Requiring the
         whole question would exclude it, and a file that merely contains the
         words somewhere in its body would win instead.
+
+        One shared word is not enough. token_budget.py holds "token" and so did
+        dashboard_app.py, and the file named after the word beat the file that
+        actually guards api calls with three more of the question's words. The
+        name has to cover most of the question, or at least two of its words.
         """
         if not terms:
             return False
@@ -329,7 +334,10 @@ class Ranking:
         if not wanted:
             return False
         name_terms = name_stems((node.label or "").replace(".py", ""))
-        return bool(wanted & name_terms)
+        overlap = wanted & name_terms
+        if not overlap:
+            return False
+        return len(overlap) >= 2 or len(overlap) == len(wanted)
 
     def _compute_exact_symbol_names(self, terms) -> frozenset:
         """Stem sets that some symbol is named exactly. Computed once per rank."""

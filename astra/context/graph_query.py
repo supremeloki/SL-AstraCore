@@ -60,6 +60,20 @@ class GraphQuery:
             for part in parts:
                 if part:
                     tokens.add(part.lower())
+            # A file's own vocabulary, not just its name. Seeds come from
+            # find_by_keyword, so with only names in this index a question
+            # about what a file does found one candidate: the file whose name
+            # happened to contain a query word. "how does the access token
+            # guard api calls" seeded token_budget.py and nothing else.
+            if node.node_type == NodeType.FILE:
+                source_terms = node.properties.get("source_terms")
+                if source_terms is None:
+                    from astra.context.file_terms import file_terms
+
+                    path = str(node.properties.get("file_path", ""))
+                    source_terms = file_terms(path) if path else set()
+                    node.properties["source_terms"] = source_terms
+                tokens.update(source_terms)
             for token in tokens:
                 self._label_index.setdefault(token, set()).add(node.id)
 

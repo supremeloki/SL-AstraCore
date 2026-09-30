@@ -93,25 +93,25 @@ def test_python_relative_package_init():
 
 
 def test_single_dir_repo_intra_package_import_yields_edge():
-    main = _mk("F:/repo/db/main.py", [
-        IRDependency(source_file="F:/repo/db/main.py", target_module="db.helpers", kind="import", line=1),
+    main = _mk(_p("db", "main.py"), [
+        IRDependency(source_file=_p("db", "main.py"), target_module="db.helpers", kind="import", line=1),
     ])
-    helper = _mk("F:/repo/db/helpers.py", [])
-    initf = _mk("F:/repo/db/__init__.py", [])
+    helper = _mk(_p("db", "helpers.py"), [])
+    initf = _mk(_p("db", "__init__.py"), [])
     _, edges = resolve_imports_into_edges([main, helper, initf])
     assert len(edges) == 1
-    assert edges[0].from_node == "F:/repo/db/main.py"
-    assert edges[0].to_node == "F:/repo/db/helpers.py"
+    assert edges[0].from_node == _p("db", "main.py")
+    assert edges[0].to_node == _p("db", "helpers.py")
 
 
 def test_single_dir_repo_flat_stem_import_still_resolves():
-    main = _mk("F:/repo/db/main.py", [
-        IRDependency(source_file="F:/repo/db/main.py", target_module="helpers", kind="import", line=1),
+    main = _mk(_p("db", "main.py"), [
+        IRDependency(source_file=_p("db", "main.py"), target_module="helpers", kind="import", line=1),
     ])
-    helper = _mk("F:/repo/db/helpers.py", [])
+    helper = _mk(_p("db", "helpers.py"), [])
     _, edges = resolve_imports_into_edges([main, helper])
     assert len(edges) == 1
-    assert edges[0].to_node == "F:/repo/db/helpers.py"
+    assert edges[0].to_node == _p("db", "helpers.py")
 
 
 def test_js_relative_import_extensions():
