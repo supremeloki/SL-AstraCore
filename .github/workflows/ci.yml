@@ -48,7 +48,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CI_MATRIX: ${{ matrix.os }} / Python ${{ matrix.python-version }}
-        run: python scripts/publish_ci_failure.py
+        run: |
+          python scripts/publish_ci_failure.py
+          # Mirror the tail into the step name so it is visible in the job list
+          # even when neither logs nor issues are readable.
+          head -c 180 pytest-output.txt | tr '
+' ' ' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Lint
         run: python -m ruff check astra/ tests/ dashboard_app.py
