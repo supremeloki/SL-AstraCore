@@ -36,18 +36,26 @@ def test_tree_sitter_symbols(path, source, want_fns, want_classes):
     "path,source,expected_dep",
     [
         ('main.go', 'import "fmt"', "fmt"),
-        ("lib.rs", "use std::io;", "std::io;"),
-        ("App.java", "import java.util.List;", "java.util.List;"),
-        ("m.c", "#include <stdio.h>", "#include <stdio.h>"),
-        ("Svc.cs", "using System.IO;", "using System.IO;"),
+        ("lib.rs", "use std::io;", "std::io"),
+        ("App.java", "import java.util.List;", "java.util.List"),
+        ("m.c", "#include <stdio.h>", "stdio.h"),
+        ("Svc.cs", "using System.IO;", "System.IO"),
         ("tool.rb", 'require "json"', "json"),
+        ("app.ts", 'import {x} from "./lib";', "./lib"),
+        ("app.js", 'import _ from "lodash";', "lodash"),
     ],
 )
 def test_tree_sitter_dependencies(path, source, expected_dep):
+    """Every language must yield the bare module specifier, not statement syntax.
+
+    Go's quotes and C's angle brackets used to survive into the graph, so no two
+    languages produced comparable targets and the import resolver could not
+    match them.
+    """
     registry = build_default_parser_registry()
     result = registry.parse(path, source)
     targets = [d.target_module for d in result.dependencies]
-    assert any(expected_dep in t for t in targets)
+    assert expected_dep in targets, f"{path}: expected {expected_dep!r}, got {targets}"
 
 
 def test_registry_includes_tree_sitter_languages():

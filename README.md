@@ -29,7 +29,7 @@ every import a constellation line, patterns and conflicts are marked in the log.
 
 ## Features
 
-- **12 language parsers** — Python (AST), JavaScript/TypeScript/TSX, Go, Rust, Java, C, C++, C#, Ruby, PHP via tree-sitter; Markdown with wiki-link semantics
+- **11 parser adapters over 22 file extensions** — Python via `ast`; JavaScript, TypeScript, TSX, Go, Rust, Java, C, C++, C#, Ruby and PHP via tree-sitter; Markdown with wiki-link semantics
 - **Persistent knowledge graph** — DuckDB (default) or SQLite, incremental indexing with atomic batch upserts
 - **Graph enrichment** — design-pattern detection (`repository`, `factory`, …), naming-convention analysis and cross-module naming-conflict detection, all wired into the index pipeline
 - **Context engine** — intent analysis, keyword/seed ranking, BFS dependency expansion, hard token budgets
@@ -119,14 +119,31 @@ RepositoryScanner → ParserRegistry → ImportResolver → DuckDB/SQLite
 ## Quality
 
 ```bash
-python -m pytest tests/ -q                      # 330 passed, 1 skipped
+python -m pytest tests/ -q                      # 370 passed, 1 skipped
 python -m mypy astra/ dashboard_app.py          # Success: no issues in 150 files
 python -m ruff check astra/ tests/              # All checks passed
 ```
 
-The codebase carries zero known technical debt: strict type coverage, lint-clean,
-and audited across eight dimensions (runtime behavior, spec completeness,
-correctness, architecture, performance, security, packaging, hygiene).
+The codebase is type-clean under mypy (0 errors) and lint-clean under a
+project-owned ruff ruleset, with CI running both on Python 3.11 and 3.12 across
+Linux and Windows. It was audited across eight dimensions (runtime behaviour,
+spec completeness, correctness, architecture, performance, security, packaging,
+hygiene); the findings that mattered were fixed, and the rest are noted below.
+
+### Known limitations
+
+Deliberate, not accidental:
+
+- **Single-user, no authentication.** The dashboard is a local tool; it refuses
+  cross-origin requests but assumes a trusted host.
+- **Phase 5/7 are opt-in.** `ToolRegistry` / `ValidationEngine` /
+  `RecoveryEngine` are declared protocols with no implementation, and the
+  agent providers are reachable from the library and CLI rather than wired into
+  the dashboard. Use them directly or wire them up.
+- **Config files are not parsed.** `.json` / `.yaml` / `.toml` are indexed as
+  files with no structural detail.
+- **BLIND_MAX depth.** Source nested deeper than ~900 levels (minified
+  JavaScript) is skipped by the tree-sitter traversal.
 
 ## License
 

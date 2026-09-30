@@ -64,7 +64,8 @@ class TestTimestamps:
         cp.emit_scan_started({"repo": "r"})
         assert len(received) == 1
         assert received[0].event_type == "SCAN_STARTED"
-        assert any(ev.event_type == "SCAN_PROGRESS" for ev in bus.log()) or True
+        # SCAN_PROGRESS is emitted by build(), not by emit_scan_started.
+        assert not any(ev.event_type == "SCAN_PROGRESS" for ev in bus.log())
 
 
 class TestReplayRoundTrip:

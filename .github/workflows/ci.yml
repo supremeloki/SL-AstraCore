@@ -31,6 +31,8 @@ jobs:
 
       - name: Tests
         run: python -m pytest tests/ -q
+        env:
+          STRICT_KPI: "1"
 
       - name: Lint
         run: python -m ruff check astra/ tests/ dashboard_app.py

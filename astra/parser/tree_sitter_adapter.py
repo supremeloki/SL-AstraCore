@@ -36,6 +36,9 @@ _IMPORT_NODES = {
     "c": ("preproc_include",),
     "cpp": ("preproc_include",),
     "ruby": ("call",),
+    "javascript": ("import_statement", "call_expression"),
+    "typescript": ("import_statement", "call_expression"),
+    "tsx": ("import_statement", "call_expression"),
 }
 
 _LANG_EXTENSIONS = {
@@ -47,6 +50,11 @@ _LANG_EXTENSIONS = {
     "csharp": (".cs",),
     "ruby": (".rb",),
     "php": (".php",),
+    # JS/TS are dispatched by the registry's _JSTSTreeSitterAdapter, which routes
+    # by extension; the entries here only need to be non-empty for can_parse().
+    "javascript": (".js", ".jsx", ".mjs", ".cjs"),
+    "typescript": (".ts",),
+    "tsx": (".tsx",),
 }
 
 
@@ -82,7 +90,45 @@ def _walk(node):
 
 
 def _strip_quotes(text: str) -> str:
-    return text.strip().strip('"').strip("'")
+    """Trim whitespace and one layer of matching quotes or angle brackets."""
+    text = text.strip()
+    pairs = {'"': '"', "'": "'", "<": ">", "(": ")", "[": "]"}
+    if len(text) >= 2 and text[0] in pairs and text[-1] == pairs[text[0]]:
+        return text[1:-1].strip()
+    return text
+
+
+def _import_target(node, source: str) -> str:
+    """The module specifier of an import node, without quotes or statement syntax.
+
+    Grammars disagree on shape: JS/TS bury the specifier in a string token
+    inside a statement, Go's import_spec *is* the quoted string, and
+    Java/C#/Rust/C put it after a keyword. Each is unwrapped here so every
+    language yields the same thing — a bare module name.
+    """
+    for child in node.named_children:
+        if child.type == "string_fragment":
+            return source[child.start_byte:child.end_byte]
+        if child.type in ("interpreted_string_literal", "string_literal", "raw_string_literal"):
+            inner = [c for c in child.named_children if c.type in ("string_fragment", "interpreted_string_fragment")]
+            if inner:
+                return source[inner[0].start_byte:inner[0].end_byte]
+            return _strip_quotes(source[child.start_byte:child.end_byte])
+        if child.type in ("string", "interpreted_string", "system_lib_string"):
+            inner = [c for c in child.named_children if c.type in ("string_fragment", "interpreted_string_fragment")]
+            if inner:
+                return source[inner[0].start_byte:inner[0].end_byte]
+            return _strip_quotes(source[child.start_byte:child.end_byte])
+
+    text = source[node.start_byte:node.end_byte].strip()
+    # Go's import_spec is itself the quoted string; C's preproc_include is a
+    # keyword plus an angle-bracketed path. Both are single tokens already.
+    if node.type in ("import_spec", "preproc_include", "system_lib_string"):
+        return _strip_quotes(text)
+    if "\n" in text or ";" in text or "=" in text:
+        # A statement, not a specifier: take the last token.
+        text = text.rstrip(";").split()[-1] if text.split() else ""
+    return _strip_quotes(text)
 
 
 class TreeSitterAdapter:
@@ -133,12 +179,14 @@ class TreeSitterAdapter:
                             line_end=node.end_point[0] + 1,
                         ))
                 elif node.type in import_nodes and self.language != "ruby":
-                    dependencies.append(IRDependency(
-                        source_file=file_path,
-                        target_module=_strip_quotes(content[node.start_byte:node.end_byte]),
-                        kind="import",
-                        line=node.start_point[0] + 1,
-                    ))
+                    module = _import_target(node, content)
+                    if module:
+                        dependencies.append(IRDependency(
+                            source_file=file_path,
+                            target_module=module,
+                            kind="import",
+                            line=node.start_point[0] + 1,
+                        ))
                 elif self.language == "ruby" and node.type == "call":
                     callee = node.named_children[0] if node.named_children else None
                     callee_name = content[callee.start_byte:callee.end_byte] if callee is not None else ""
