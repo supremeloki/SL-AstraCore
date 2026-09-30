@@ -10,6 +10,7 @@ import os
 import subprocess
 
 import pytest
+import shutil
 
 import dashboard_app as da
 from astra.agents.models import AgentRequest
@@ -142,6 +143,8 @@ def test_codex_survives_a_launch_failure(monkeypatch):
 
 def test_codex_resolves_the_windows_npm_shim():
     """npm installs codex as a .cmd shim; subprocess needs the real extension."""
+    if shutil.which("codex") is None:
+        pytest.skip("codex is not installed on this machine")
     resolved = CodexProvider._resolve_binary()
     assert resolved
     if os.name == "nt":

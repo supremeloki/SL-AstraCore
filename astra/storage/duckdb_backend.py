@@ -83,9 +83,11 @@ class DuckDBBackend:
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
         self._conn: Optional[duckdb.DuckDBPyConnection] = None
+        self._column_cache: dict[str, list[str]] = {}
 
     def connect(self) -> None:
         self._conn = duckdb.connect(self._db_path)
+        self._column_cache.clear()
         _warm_list_cast(self._conn)
         self._conn.execute(_NODE_DDL)
         self._conn.execute(_EDGE_DDL)
@@ -231,7 +233,6 @@ class DuckDBBackend:
         # executemany with INSERT OR REPLACE rebuilds the PK index per row in DuckDB
         # and is orders of magnitude slower than a set-based unnest insert.
         keys = [key_columns] if isinstance(key_columns, str) else key_columns
-        key_list = ", ".join(keys)
 
         _warm_list_cast(self.conn)
         columns = self._table_columns(table)
@@ -239,24 +240,38 @@ class DuckDBBackend:
         column_arrays = [[r[i] for r in rows] for i in range(len(columns))]
         unnest_select = ", ".join(f"unnest(?::VARCHAR[]) AS {col}" for col in columns)
 
-        self.conn.execute("CREATE TEMP TABLE IF NOT EXISTS _astra_batch AS SELECT * FROM " + table + " LIMIT 0")
-        self.conn.execute("DELETE FROM _astra_batch")
+        # The staging table mirrors whichever target is being written, so it is
+        # keyed by table name — one per (connection, target) pair. Reusing a
+        # single name would leave the node columns in place when edges are
+        # written next, and the column count would not match.
+        staging = f"_astra_batch_{table}"
+        self.conn.execute(f"CREATE TEMP TABLE IF NOT EXISTS {staging} AS SELECT * FROM " + table + " LIMIT 0")
+        self.conn.execute(f"DELETE FROM {staging}")
         self.conn.execute(
-            f"INSERT INTO _astra_batch SELECT * FROM (SELECT {unnest_select} FROM (SELECT 1) _) AS batch",
+            f"INSERT INTO {staging} SELECT * FROM (SELECT {unnest_select} FROM (SELECT 1) _) AS batch",
             column_arrays,
         )
         self.conn.execute(
-            f"DELETE FROM {table} WHERE ({key_list}) IN (SELECT {key_list} FROM _astra_batch)"
+            f"DELETE FROM {table} WHERE EXISTS ("
+            f"SELECT 1 FROM {staging} WHERE "
+            + " AND ".join(f"{staging}.{k} = {table}.{k}" for k in keys)
+            + ")"
         )
-        self.conn.execute(f"INSERT INTO {table} SELECT * FROM _astra_batch")
-        self.conn.execute("DROP TABLE _astra_batch")
+        self.conn.execute(f"INSERT INTO {table} SELECT * FROM {staging}")
 
     def _table_columns(self, table: str) -> list[str]:
+        # The schema is fixed after connect(), so this is asked once per table
+        # rather than once per batch.
+        cached = self._column_cache.get(table)
+        if cached is not None:
+            return cached
         rows = self.conn.execute(
             "SELECT column_name FROM information_schema.columns WHERE table_name = ? ORDER BY ordinal_position",
             [table],
         ).fetchall()
-        return [r[0] for r in rows]
+        columns = [r[0] for r in rows]
+        self._column_cache[table] = columns
+        return columns
 
     def transaction(self):
         return _DuckDBTransaction(self)

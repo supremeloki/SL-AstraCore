@@ -37,6 +37,10 @@ class ContextSelector:
 
         relevant_list = list(relevant)
         ranked = self._ranking.rank(relevant_list, task_analysis)
+        # The score is kept, not just the order: the orchestrator reports it as
+        # relevance_score, and it defaults to 1.0 when absent — which made every
+        # node look equally relevant downstream.
+        scores = dict(ranked)
         top = [nid for nid, _ in ranked[:max_nodes]]
 
         relevant_concepts = []
@@ -74,6 +78,7 @@ class ContextSelector:
                     "layer": node.layer,
                     "risk": node.properties.get("risk", "low"),
                     "file_path": file_path,
+                    "relevance": scores.get(nid, 0.0),
                 })
 
         pack = ContextPack(
