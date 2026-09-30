@@ -39,6 +39,17 @@ def _read_text(path: str) -> str:
     return Path(path).read_text(encoding="utf-8", errors="replace")
 
 
+def _key(root_path: str) -> str:
+    """The dict key for a repository.
+
+    One spelling per path, so registering a path and then looking it up by a
+    short name, a relative path or a trailing slash finds the same record.
+    Only the Windows runners use 8.3 names in temp paths, so only they hit
+    this — as "Repository not registered" on a repo that was registered.
+    """
+    return str(Path(root_path).resolve())
+
+
 class RuntimeOrchestrator:
     """Manages repository lifecycle: register, index, refresh, query context.
 
@@ -77,7 +88,7 @@ class RuntimeOrchestrator:
         backend: str = "duckdb",
     ) -> RepoRecord:
         """Register a repository for indexing."""
-        root_path = str(Path(root_path).resolve())
+        root_path = _key(root_path)
         name = name or Path(root_path).name
 
         if root_path in self._repos:
@@ -109,9 +120,8 @@ class RuntimeOrchestrator:
 
         Deterministic, idempotent, incremental-safe.
         """
-        record = self._repos.get(root_path)
-        if record is None:
-            raise ValueError(f"Repository not registered: {root_path}")
+        record = self._get_record(root_path)
+        root_path = record.root_path
 
         # Both locks: the threading.Lock serialises threads in this process,
         # the file lock serialises processes. DuckDB's own lock is per-process,
@@ -573,11 +583,11 @@ class RuntimeOrchestrator:
         )
 
     def get_repo(self, root_path: str) -> Optional[RepoRecord]:
-        return self._repos.get(root_path)
+        return self._repos.get(_key(root_path))
 
     def remove_repo(self, root_path: str) -> bool:
         """Unregister a repo. Returns False if it was never registered."""
-        record = self._repos.pop(root_path, None)
+        record = self._repos.pop(_key(root_path), None)
         return record is not None
 
     def list_repos(self) -> Sequence[RepoRecord]:
@@ -662,13 +672,13 @@ class RuntimeOrchestrator:
         return rules
 
     def _get_record(self, root_path: str) -> RepoRecord:
-        record = self._repos.get(root_path)
+        record = self._repos.get(_key(root_path))
         if record is None:
             raise ValueError(f"Repository not registered: {root_path}")
         return record
 
     def _get_active_record(self, root_path: str) -> RepoRecord:
-        record = self._repos.get(root_path)
+        record = self._repos.get(_key(root_path))
         if record is None:
             raise ValueError(f"Repository not registered: {root_path}")
         if record.status != RepoStatus.ACTIVE:
