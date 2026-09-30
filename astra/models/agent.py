@@ -4,7 +4,6 @@ from enum import Enum
 
 class AgentKind(Enum):
     CODEX = "codex"
-    CLAUDE = "claude"
     HERMES = "hermes"
     GPT = "gpt"
     LOCAL_LLM = "local_llm"
