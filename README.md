@@ -30,9 +30,10 @@ every import a constellation line, patterns and conflicts are marked in the log.
 ## Features
 
 - **11 parser adapters over 22 file extensions** — Python via `ast`; JavaScript, TypeScript, TSX, Go, Rust, Java, C, C++, C#, Ruby and PHP via tree-sitter; Markdown with wiki-link semantics
-- **Persistent knowledge graph** — DuckDB (default) or SQLite, one atomic batch upsert per index
+- **Persistent knowledge graph** — DuckDB (default) or SQLite, incremental indexing with atomic batch upserts
 - **Graph enrichment** — design-pattern detection (`repository`, `factory`, …), naming-convention analysis and cross-module naming-conflict detection, all wired into the index pipeline
 - **Context engine** — intent analysis, keyword/seed ranking, BFS dependency expansion, hard token budgets
+- **Agent loop** — packs the repository, reviews a model's proposed edit against the real files, and refuses anything unanchored, unparsable or unparsed; applying is a separate, explicit step
 - **Live dashboard** — SSE event stream, interactive canvas star chart, file explorer, patch review, execution monitor, telemetry sparklines
 
 ## Install
@@ -64,6 +65,25 @@ astra index F:\path\to\repo
 astra context F:\path\to\repo "how does authentication work"
 astra serve --port 8780
 ```
+
+### Ask a question and get a reviewed edit
+
+The agent loop takes the answer from whatever model you use, reviews it against
+the real files, and writes nothing until you say so:
+
+```bash
+# run your model however you like, then review its reply
+astra propose F:\path\to\repo "why does charge subtract one" \
+    --reply reply.json --emit proposal.json
+
+# read it, then apply it
+astra apply F:\path\to\repo proposal.json
+```
+
+The same review is `POST /api/agent/propose`, which takes the model's reply and
+returns the diff, the risk, and why anything was rejected. An edit whose
+`old_text` is not verbatim in the file it names is refused rather than applied,
+and `astra apply` refuses a proposal whose file changed since the review.
 
 The dashboard mints an access token at startup and requires it on every API
 call, so a page open in the same browser cannot drive it. Pin the token with
@@ -107,25 +127,26 @@ RepositoryScanner → ParserRegistry → ImportResolver → DuckDB/SQLite
 | `astra/context` | task analysis, ranking, token budgeting |
 | `astra/runtime` | orchestrator, event bus, replayable execution journal |
 | `astra/patch` | semantic diff and risk scoring for a proposed edit |
+| `astra/agent` | the loop: pack → model → reviewed edit → explicit apply |
 
 ## Quality
 
 ```bash
-python -m pytest tests/ -q                      # 281 passed, 1 skipped
-python -m mypy astra/ dashboard_app.py          # Success: no issues in 95 files
+python -m pytest tests/ -q                      # 331 passed, 1 skipped
+python -m mypy astra/ dashboard_app.py          # Success: no issues in 96 files
 python -m ruff check astra/ tests/ dashboard_app.py   # All checks passed
 ```
 
-The codebase is type-clean under mypy (0 errors over 95 files) and lint-clean
+The codebase is type-clean under mypy (0 errors over 96 files) and lint-clean
 under a project-owned ruff ruleset, with CI running both on Python 3.11 and 3.12
 across Linux and Windows. Measured on this repository:
 
 | | |
 |---|---|
-| index 3,000 files | 6.4s (467 files/s) |
-| query | 63ms median |
+| index 3,000 files | 7.5s (402 files/s) |
+| query | 62ms median |
 | ranking accuracy, 12 real questions | 11/12 first place, 12/12 top three |
-| pack carrying source at a 4k budget | 9 of 13 nodes |
+| pack carrying source at a 4k budget | 8 of 13 nodes |
 
 ### Known limitations
 
@@ -136,13 +157,13 @@ Deliberate, not accidental:
   the server binds all interfaces so it is reachable from other machines on the
   network. Set `ASTRA_TOKEN` to pin the token; there is no TLS, so do not expose
   it beyond a trusted network.
-- **No agent integration.** There is no agent layer: nothing calls an LLM,
-  applies a patch, or validates a result. The dashboard shows what the index
-  found and can compute a semantic diff for a proposed edit, but closing the
-  loop is the caller's job.
-- **A re-index re-reads every file.** Edges are derived from pairs of files, so
-  skipping unchanged ones would leave stale edges pointing at them; correctness
-  won over the time saving.
+- **No provider is wired in.** The agent loop takes the model's reply and
+  reviews it; it never calls one. Running a model is the caller's, because a
+  bundled provider means an API key, a network dependency and a bill.
+- **A re-index reads the whole node table.** Unchanged files are not parsed
+  again, which makes a re-index with nothing to do about 3x faster than a full
+  one, but the write still reads every node, so a run with one changed file
+  costs about the same as a full index.
 - **Config files are not parsed.** `.json` / `.yaml` / `.toml` are indexed as
   files with no structural detail.
 - **BLIND_MAX depth.** Source nested deeper than ~900 levels (minified
