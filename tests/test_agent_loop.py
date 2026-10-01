@@ -84,7 +84,6 @@ def test_malformed_json_warns():
 # ── reviewing against the real source ─────────────────────────────────────
 
 def test_a_well_anchored_edit_is_accepted(repo):
-    source = (repo / "billing.py").read_text(encoding="utf-8")
     edit = ProposedEdit(
         path="billing.py",
         old_text="return amount - 1",
@@ -131,7 +130,6 @@ def test_an_edit_to_a_missing_file_is_reported(repo):
 
 
 def test_an_edit_that_changes_nothing_is_reported(repo):
-    source = (repo / "billing.py").read_text(encoding="utf-8")
     edit = ProposedEdit(
         path="billing.py", old_text="return amount - 1", new_text="return amount - 1"
     )

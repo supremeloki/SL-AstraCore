@@ -61,7 +61,7 @@ def _propose(path: str, args) -> int:
     The reply comes from stdin with `--reply -`, which is how a caller wires
     this to whatever model it uses: the CLI never calls one itself.
     """
-    from astra.agent.loop import parse_edits, render_pack, review
+    from astra.agent.loop import parse_edits, review
     from astra.runtime.orchestrator import RuntimeOrchestrator
 
     if args.reply == "-":
@@ -94,7 +94,7 @@ def _propose(path: str, args) -> int:
     print(f"task: {pack.task_summary}")
     print(f"proposed: {len(result.edits)} edit(s)  risk: {result.risk}  "
           f"confidence: {result.confidence:.2f}")
-    for (edited, (_edited_path, diff)) in zip(result.edits, result.diffs):
+    for (edited, (_edited_path, diff)) in zip(result.edits, result.diffs, strict=False):
         print(f"  {edited.path}: +{diff.added} -{diff.removed} ~{diff.modified}"
               f"{'  ' + edited.reason if edited.reason else ''}")
     for warning in result.warnings:
@@ -139,7 +139,7 @@ def _apply(path: str, args) -> int:
     import json
 
     from astra.agent.apply import ApplyError, apply_edit
-    from astra.agent.loop import EditReview, ProposedEdit
+    from astra.agent.loop import ProposedEdit
 
     try:
         payload = json.loads(Path(args.proposal).read_text(encoding="utf-8"))

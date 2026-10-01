@@ -763,7 +763,7 @@ async def agent_propose(payload: Optional[dict] = None):
                 "removed": diff.removed,
                 "modified": diff.modified,
             }
-            for edit, (_path, diff) in zip(result.edits, result.diffs)
+            for edit, (_path, diff) in zip(result.edits, result.diffs, strict=False)
         ],
     }
 
