@@ -8,7 +8,7 @@
 
 Scan → Parse → Graph → Enrich → Context Packs, behind a live star-chart dashboard.
 
-[![Tests](https://img.shields.io/badge/tests-330%20passed-brightgreen)](#quality)
+[![Tests](https://img.shields.io/badge/tests-281%20passed-brightgreen)](#quality)
 [![mypy](https://img.shields.io/badge/mypy-clean-blue)](#quality)
 [![ruff](https://img.shields.io/badge/ruff-clean-blue)](#quality)
 [![Python](https://img.shields.io/badge/python-3.11+-informational)](https://www.python.org)
@@ -30,12 +30,10 @@ every import a constellation line, patterns and conflicts are marked in the log.
 ## Features
 
 - **11 parser adapters over 22 file extensions** — Python via `ast`; JavaScript, TypeScript, TSX, Go, Rust, Java, C, C++, C#, Ruby and PHP via tree-sitter; Markdown with wiki-link semantics
-- **Persistent knowledge graph** — DuckDB (default) or SQLite, incremental indexing with atomic batch upserts
+- **Persistent knowledge graph** — DuckDB (default) or SQLite, one atomic batch upsert per index
 - **Graph enrichment** — design-pattern detection (`repository`, `factory`, …), naming-convention analysis and cross-module naming-conflict detection, all wired into the index pipeline
 - **Context engine** — intent analysis, keyword/seed ranking, BFS dependency expansion, hard token budgets
-- **Agent adapter layer** — config-driven providers: `generic` fallback, real **Codex CLI** bridge, `manual` hand-off briefs for human/VS Code execution
 - **Live dashboard** — SSE event stream, interactive canvas star chart, file explorer, patch review, execution monitor, telemetry sparklines
-- **Resilience stack** — retry with jitter, circuit breaker, sandboxing, resource quotas, replayable execution journal
 
 ## Install
 
@@ -75,18 +73,6 @@ machine to opt out.
 Repository data lives in `~/.astra` (override with the `ASTRA_HOME` environment
 variable). Each repo gets its own deterministic graph database.
 
-### Agent providers
-
-Configure task-execution providers in `astra.yaml`:
-
-```yaml
-agent:
-  providers:
-    - generic   # echo fallback (default)
-    - codex     # real Codex CLI; skipped when the binary is absent
-    - manual    # render a task brief for human / VS Code execution
-```
-
 ## Dashboard
 
 | Panel | What it shows |
@@ -106,7 +92,7 @@ RepositoryScanner → ParserRegistry → ImportResolver → DuckDB/SQLite
                                                     ↓
                                         Pattern/Conflict Enrichment
                                                     ↓
-                       ContextEngine ← RuntimeOrchestrator ← Agent Providers
+                       ContextEngine ← RuntimeOrchestrator
                               ↓
                      FastAPI Dashboard (SSE)
 ```
@@ -119,26 +105,25 @@ RepositoryScanner → ParserRegistry → ImportResolver → DuckDB/SQLite
 | `astra/graph` | mutator diffing, pattern/conflict enrichment |
 | `astra/storage` | DuckDB/SQLite backends, set-based upserts |
 | `astra/context` | task analysis, ranking, token budgeting |
-| `astra/runtime` | orchestrator, metrics/events/journal, resilience modules |
+| `astra/runtime` | orchestrator, event bus, replayable execution journal |
 | `astra/patch` | semantic diff and risk scoring for a proposed edit |
 
 ## Quality
 
 ```bash
-python -m pytest tests/ -q                      # 252 passed, 1 skipped
+python -m pytest tests/ -q                      # 281 passed, 1 skipped
 python -m mypy astra/ dashboard_app.py          # Success: no issues in 95 files
 python -m ruff check astra/ tests/ dashboard_app.py   # All checks passed
 ```
 
 The codebase is type-clean under mypy (0 errors over 95 files) and lint-clean
 under a project-owned ruff ruleset, with CI running both on Python 3.11 and 3.12
-across Linux and Windows. Measured on this repository, `python .final.py`
-reproduces every number below:
+across Linux and Windows. Measured on this repository:
 
 | | |
 |---|---|
-| index 3,000 files | 5.8s (513 files/s) |
-| query | 37ms median |
+| index 3,000 files | 6.4s (467 files/s) |
+| query | 63ms median |
 | ranking accuracy, 12 real questions | 11/12 first place, 12/12 top three |
 | pack carrying source at a 4k budget | 9 of 13 nodes |
 
