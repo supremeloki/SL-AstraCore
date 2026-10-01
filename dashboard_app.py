@@ -705,6 +705,69 @@ def web_manifest():
     )
 
 
+@app.post("/api/agent/propose")
+async def agent_propose(payload: Optional[dict] = None):
+    """Answer a question by proposing an edit — without writing anything.
+
+    Takes the same `reply` the agent loop would get from a model, so the caller
+    runs the model wherever it likes and posts the answer here. The response is
+    the review: which edits were parsed, which were rejected and why, the diff
+    of each surviving edit, and the risk. Applying stays /api/patch/apply, a
+    separate call, so nothing is written by proposing.
+    """
+    from astra.agent.loop import parse_edits, review
+
+    payload = payload or {}
+    root = _confine_to_registered_repo(str(Path(payload.get("path", "")).resolve()))
+    reply = payload.get("reply", "")
+
+    edits, warnings = parse_edits(reply)
+    if warnings:
+        return {"status": "rejected", "warnings": list(warnings), "edits": []}
+
+    def dependents(relative: str) -> int:
+        """How many nodes an edit to this file reaches. A bad count must not
+        fail the review, so it degrades to zero rather than propagating."""
+        try:
+            rec = _get_or_create(root)
+            from astra.graph.query_engine import GraphQueryEngine
+            from astra.storage.backend import StorageProvider
+
+            storage = StorageProvider(
+                backend=rec.storage_backend, db_path=rec.db_path
+            ).create()
+            storage.connect()
+            try:
+                analysis = GraphQueryEngine(storage).impact_analysis(
+                    f"file:{relative}", depth=2
+                )
+                return max(len(analysis.nodes) - 1, 0)
+            finally:
+                storage.close()
+        except Exception:  # noqa: BLE001 - the count is advisory
+            return 0
+
+    result = review(tuple(edits), root, downstream_counts=dependents)
+
+    return {
+        "status": "reviewed" if result.applies_cleanly else "rejected",
+        "risk": result.risk,
+        "confidence": result.confidence,
+        "downstream": result.downstream,
+        "warnings": list(result.warnings),
+        "edits": [
+            {
+                "path": edit.path,
+                "reason": edit.reason,
+                "added": diff.added,
+                "removed": diff.removed,
+                "modified": diff.modified,
+            }
+            for edit, (_path, diff) in zip(result.edits, result.diffs)
+        ],
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
 

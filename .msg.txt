@@ -1,31 +1,39 @@
-feat(index): re-index only what changed
+feat(agent): the loop the README claimed and the tree did not have
 
-The previous attempt was reverted because skipping unchanged files left stale
-edges behind, and correctness won over speed. This fixes the cause instead of
-avoiding it.
+The project said it returned "ranked, token-budgeted context packs ready to
+hand to any AI coding agent", and contained no code an agent could be handed:
+nothing called a model, nothing parsed a reply, nothing closed the loop. The
+pack builder, the AST differ, the risk scorer and the write endpoint all
+existed; nothing connected them.
 
-An import edge is only recomputed when both endpoints are parsed. A skipped
-file therefore contributed nothing, and three defects followed:
+astra/agent/loop.py is that connection, and it calls no model. The model is a
+callable the caller supplies, which is why every case here runs without a
+network and why the loop works with any provider.
 
-- Dependencies were never stored, so a skipped file rebuilt no edges even in
-  principle. The import list now rides along on the file node's metadata.
-- _reconstruct_for_resolution read those dependencies back but the node id it
-  produced was missing from path_to_node_id, so the edge out of the skipped
-  file was dropped on the way to storage.
-- _touches_unreadable exempted every skipped file from stale-edge deletion,
-  which kept a deleted import in the graph forever.
+    question -> pack -> model -> proposed edit -> parsed diff -> risk
+             -> the caller decides whether to write
 
-Skipped files are also opened, not just stat'd. An index that silently keeps
-a stale file because its mtime had not moved leaves the user believing the
-graph is current; a lock now shows up in the warnings.
+The safety property is the point, and it is enforced rather than documented:
+the model never receives a way to write. It returns text, the edit is checked
+against the real file, and applying it is a separate call.
 
-A file that fails to read keeps no stamp, so the next run retries it — the
-failure may have been an editor's lock rather than anything about the file.
+Three things are refused before they can become a suggestion:
+- an edit whose old_text is not verbatim in the file it names, because a
+  model that paraphrases the code it was shown would otherwise rewrite a file
+  from a paraphrase
+- an edit whose result does not parse
+- an edit that changes nothing
 
-On 200 files: no change is 3x faster than a full index. One changed file is
-not faster, because the write still reads the whole node table.
+astra/agent/apply.py is the other half and is deliberately separate. It
+refuses a proposal whose file changed since the review, so an edit anchored in
+code that has since moved cannot be applied against a review that no longer
+describes it. It stops at the first failure rather than continuing: three
+edits where the second no longer matches has already left the repository in a
+state nobody reviewed.
 
-test_parse_failure_is_reported_not_swallowed now touches the file before the
-second index. An unchanged file is skipped by design, and a parser that was
-never asked cannot fail — the old version asserted that a skip would report
-a parse error, which is not a thing.
+Reachable three ways: POST /api/agent/propose takes the model's reply and
+returns the review; `astra propose` does the same and can --emit the proposal;
+`astra apply` writes it.
+
+Nothing here needs a provider account to test, which is the point — the
+previously untested claim was the one about being ready for an agent.
