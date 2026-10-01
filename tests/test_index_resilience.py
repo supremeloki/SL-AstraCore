@@ -113,8 +113,13 @@ def test_parse_failure_is_reported_not_swallowed(repo, monkeypatch):
         return original(file_path, content)
 
     monkeypatch.setattr(orch._parser_registry, "parse", exploding)
+    # Touch the file so it is re-parsed. An unchanged file is skipped by
+    # design, and a parser that was never asked cannot fail.
+    (repo / "b.py").write_text("def h():\n    return 2\n", encoding="utf-8")
     record = orch.index_repo(str(repo))
     monkeypatch.undo()
 
     assert _file_nodes(record.db_path) == before_files, "a file whose parser crashed lost its node"
-    assert any("b.py" in w for w in record.warnings)
+    assert any("b.py" in w for w in record.warnings), (
+        f"a parser failure must be visible; warnings were {record.warnings}"
+    )

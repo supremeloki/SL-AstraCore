@@ -15,8 +15,12 @@ from astra.ir.models import (
     ContextEdgeRef,
     ContextNodeRef,
     EdgeType,
+    FileRole,
     IRContextPack,
+    IRDependency,
     IREdge,
+    IRFileNode,
+    IRFileParseResult,
     IRNode,
     IRSymbol,
     NodeType,
@@ -32,6 +36,21 @@ from astra.storage.backend import StorageProvider
 from astra.context.engine import ContextEngine
 
 logger = get_logger("astra.runtime.orchestrator")
+
+
+def _symbol_kind(raw) -> SymbolKind:
+    """The stored symbol kind, which is a name in metadata, not an enum.
+
+    VARIABLE is the fallback because every SymbolKind member is a concrete
+    thing a parser can find, and an unrecognised name is closer to a variable
+    than to a class.
+    """
+    if isinstance(raw, SymbolKind):
+        return raw
+    try:
+        return SymbolKind[str(raw)]
+    except KeyError:
+        return SymbolKind.VARIABLE
 
 
 def _read_text(path: str) -> str:
@@ -70,6 +89,9 @@ class RuntimeOrchestrator:
         # lock per repo, shared by writers and readers, prevents that.
         self._repo_locks: dict[str, threading.Lock] = {}
         self._document_frequency: dict[str, tuple] = {}
+        # path -> (mtime_ns, size) per repo, so a re-index only parses
+        # what changed.
+        self._file_stamps: dict[str, dict[str, tuple[int, int]]] = {}
         self._graph_cache: dict[str, tuple] = {}
         astra_home = os.environ.get("ASTRA_HOME") or os.path.join(
             os.path.expanduser("~"), ".astra"
@@ -149,16 +171,40 @@ class RuntimeOrchestrator:
 
         storage = None
         try:
-            # 1. Scan repo
-            files = self._scan_repo_files(root_path, file_extensions)
+            # 1. Scan the repository, then work out what actually changed.
+            #
+            # A file whose mtime and size are unchanged has the same content,
+            # so parsing it can only produce the nodes it already has. The
+            # previous attempt at skipping them left stale edges behind,
+            # because an import edge is only recomputed when both of its
+            # endpoints are parsed — the fix was to stop skipping the files
+            # entirely, which was correct and slow. Here the unchanged files
+            # are still skipped for parsing, and their dependency lists are
+            # read back from the graph so the resolver sees both endpoints.
+            all_files = self._scan_repo_files(root_path, file_extensions)
 
-            # A full re-index, deliberately. Edges are derived from pairs of
-            # files, so re-parsing only the changed ones cannot rebuild the
-            # edges that point at them: deleting an import from a.py and
-            # re-indexing left a.py -> b.py in the graph, because b.py was never
-            # re-parsed and the pair is only recomputed when both are. Skipping
-            # unchanged files looked like a cheap win and was silently wrong.
-            files = self._scan_repo_files(root_path, file_extensions)
+            previous = self._file_stamps.get(record.root_path, {})
+            current: dict[str, tuple[int, int]] = {}
+            changed: list[str] = []
+            for file_path in all_files:
+                try:
+                    info = os.stat(file_path)
+                except OSError:
+                    changed.append(file_path)
+                    continue
+                stamp = (info.st_mtime_ns, info.st_size)
+                current[file_path] = stamp
+                if previous.get(file_path) != stamp:
+                    changed.append(file_path)
+            skipped_paths = [
+                p for p in all_files
+                if p not in set(changed)
+            ]
+            if previous:
+                record.warnings.append(
+                    f"incremental: {len(changed)} of {len(all_files)} files changed"
+                )
+            files = changed
 
             # 2. Parse all files. A file that fails to read (sharing violation from
             # an editor/AV/git, transient IO) is NOT the same as a deleted file —
@@ -170,8 +216,13 @@ class RuntimeOrchestrator:
             # the Python AST is the CPU-bound half and threads would only add
             # contention around the interpreter's own lock.
             contents: dict[str, str | None] = {}
+            # Skipped files are opened too, purely to notice a lock. An index
+            # that silently keeps a stale file because its mtime had not
+            # changed would leave the user believing the graph is current.
+            # The content is discarded; only the failure matters.
+            to_open = list(files) + list(skipped_paths)
             with ThreadPoolExecutor(max_workers=16) as pool:
-                futures = {pool.submit(_read_text, f): f for f in files}
+                futures = {pool.submit(_read_text, f): f for f in to_open}
                 for future in as_completed(futures):
                     file_path = futures[future]
                     try:
@@ -181,7 +232,9 @@ class RuntimeOrchestrator:
                         record.warnings.append(f"unreadable: {file_path} ({exc})")
 
             parse_results = []
-            unreadable_files: list[str] = []
+            unreadable_files: list[str] = [
+                p for p in skipped_paths if contents.get(p) is None
+            ]
             for file_path in files:
                 content = contents.get(file_path)
                 if content is None:
@@ -223,6 +276,20 @@ class RuntimeOrchestrator:
                             "line_count": file_node.line_count,
                             "byte_size": file_node.byte_size,
                             "role": file_node.role.name if hasattr(file_node.role, "name") else str(file_node.role),
+                            # The import list travels with the file node, so an
+                            # incremental run can rebuild this file's edges
+                            # without parsing it. Without it a skipped file
+                            # contributes no dependencies and every edge
+                            # touching it silently disappears.
+                            "dependencies": [
+                                {
+                                    "target_module": dep.target_module,
+                                    "kind": dep.kind,
+                                    "line": dep.line,
+                                    "level": dep.level,
+                                }
+                                for dep in result.dependencies
+                            ],
                         },
                     )
                     nodes_to_upsert.append(canonical_node)
@@ -252,7 +319,27 @@ class RuntimeOrchestrator:
 
             # 5. Resolve imports; resolver works in root-relative space, map
             # back to canonical file: node IDs.
-            _, dep_edges = resolve_imports_into_edges(parse_results)
+            #
+            # The resolver needs every file's dependency list, because an edge
+            # is only recomputed when both of its endpoints are parsed. An
+            # incremental run has the changed files freshly parsed and the rest
+            # already in the graph, so the unchanged ones are read back and
+            # handed over as lightweight results — parsing them again is what
+            # made incremental indexing pointless, and dropping them is what
+            # left stale edges behind last time this was tried.
+            resolution_input = list(parse_results)
+            if skipped_paths:
+                reconstructed = self._reconstruct_for_resolution(
+                    storage, skipped_paths
+                )
+                resolution_input.extend(reconstructed)
+                # A skipped file produces edges too, so its node id has to be
+                # resolvable. Without this the edge out of it was dropped by
+                # the lookup below and re-adding an import silently did nothing.
+                for result in reconstructed:
+                    if result.file_node:
+                        path_to_node_id[result.file_node.file_path] = result.file_node.id
+            _, dep_edges = resolve_imports_into_edges(resolution_input)
             edges_to_upsert = [
                 IREdge(
                     from_node=path_to_node_id[edge.from_node],
@@ -303,13 +390,27 @@ class RuntimeOrchestrator:
             # import that was deleted — has to go.
             fresh_ids = {n.id for n in nodes_to_upsert}
             existing_ids = storage.get_node_ids()
-            preserved_file_ids = {f"file:{path}" for path in unreadable_files}
+            # Two kinds of file keep their nodes: one this run could not read, and one
+            # it deliberately did not re-parse. Without the second an
+            # incremental run deleted the whole repository, because the write
+            # is a full replacement rather than a merge.
+            preserved_file_ids = {f"file:{path}" for path in unreadable_files} | {
+                f"file:{path}" for path in skipped_paths
+            }
             preserved_ids = {nid for nid in existing_ids if nid in preserved_file_ids}
             preserved_ids |= {
                 nid
                 for nid in existing_ids
                 if any(nid.startswith(f"{fid}::") for fid in preserved_file_ids)
             }
+            # Analytic nodes describe the repository rather than one file, so
+            # they are not covered by the per-file skip. They are rebuilt on
+            # every run that re-parsed anything, and kept when it did not.
+            preserved_ids |= {
+                nid
+                for nid in existing_ids
+                if nid.startswith("pattern:") or nid.startswith("conflict:")
+            } if not files else set()
             stale_ids = sorted(existing_ids - fresh_ids - preserved_ids)
 
             # 5d. Edges between surviving nodes also go stale: remove an import
@@ -317,15 +418,31 @@ class RuntimeOrchestrator:
             # Node deletion cascades, so only edges whose endpoints both survive
             # need an explicit delete. An edge touching a file we could not read
             # this run is kept: we have no fresh view of it, so it is not stale.
-            preserved_prefixes = tuple(f"{fid}::" for fid in preserved_file_ids)
             upserted_keys = {(x.from_node, x.to_node, x.type.name) for x in edges_to_upsert}
             surviving = fresh_ids | preserved_ids
 
+            # Only a file this run could NOT read blocks an edge from being
+            # stale. A file that was merely skipped still has its dependency
+            # list on record, so its edges are rebuilt like everyone else's —
+            # exempting it here is what kept a deleted import in the graph.
+            unreadable_file_ids = {f"file:{path}" for path in unreadable_files}
+            unreadable_prefixes = tuple(f"{fid}::" for fid in unreadable_file_ids)
+
             def _touches_unreadable(node_id: str) -> bool:
-                if node_id in preserved_file_ids:
+                if node_id in unreadable_file_ids:
                     return True
                 # startswith(()) is always True, so only test when non-empty.
-                return bool(preserved_prefixes) and node_id.startswith(preserved_prefixes)
+                return bool(unreadable_prefixes) and node_id.startswith(unreadable_prefixes)
+
+            # An edge whose endpoints this run did not rebuild was not rebuilt — the
+            # resolver only produces import edges, so a skipped file has no
+            # fresh BELONGS_TO or IMPLEMENTS edges to re-assert. Deleting them
+            # strands the surviving nodes; they are not stale, they are simply
+            # untouched this run.
+            def _between_skipped(edge) -> bool:
+                return (
+                    edge.from_node in preserved_ids and edge.to_node in preserved_ids
+                )
 
             stale_edges = sorted(
                 (e.from_node, e.to_node, e.type)
@@ -335,6 +452,7 @@ class RuntimeOrchestrator:
                 and e.to_node in surviving
                 and not _touches_unreadable(e.from_node)
                 and not _touches_unreadable(e.to_node)
+                and not _between_skipped(e)
             )
 
             mutator.apply_batch(
@@ -345,7 +463,13 @@ class RuntimeOrchestrator:
             )
 
             # 7. Update record
-            record.file_count = len(files)
+            # A file this run could not read or parse keeps no stamp, so the next
+            # run tries it again — the failure may have been an editor's lock
+            # or an antivirus filter rather than anything about the file.
+            for failed in unreadable_files:
+                current.pop(failed, None)
+            self._file_stamps[record.root_path] = current
+            record.file_count = len(current)
             record.node_count = storage.node_count()
             record.edge_count = storage.edge_count()
             record.last_indexed = datetime.now(timezone.utc).isoformat()
@@ -599,6 +723,121 @@ class RuntimeOrchestrator:
 
     def list_repos(self) -> Sequence[RepoRecord]:
         return list(self._repos.values())
+
+    def _reconstruct_for_resolution(
+        self,
+        storage,
+        paths: Sequence[str],
+    ) -> list:
+        """Rebuild lightweight parse results for files this run did not parse.
+
+        The import resolver needs each file's dependency list, and only that.
+        The dependencies were recorded on the symbol nodes when the file was
+        indexed, so they can be read back instead of re-parsing the source —
+        which is the difference between an incremental run and a full one.
+
+        Symbols come back too, because _common_root reads file nodes and the
+        resolver matches module names against them; a result with only a file
+        node and no dependencies would resolve nothing.
+        """
+        if not paths:
+            return []
+        wanted = {f"file:{p}" for p in paths}
+        by_id = {node.id: node for node in storage.get_all_nodes()}
+        # Storage returns plain IRNode rows; a file is an IRFileNode, which is
+        # a subclass carrying file_path, language and role. Those three live in
+        # metadata once flattened into a row, so read them back from there.
+        def _as_file_node(node):
+            metadata = dict(node.metadata or {})
+            file_path = getattr(node, "file_path", "") or metadata.get("file_path", "")
+            if not file_path:
+                file_path = node.id.removeprefix("file:")
+            language = getattr(node, "language", "") or metadata.get("language", "")
+            role = getattr(node, "role", None)
+            if role is None:
+                try:
+                    role = FileRole(metadata.get("role", FileRole.UNKNOWN.value))
+                except ValueError:
+                    role = FileRole.UNKNOWN
+            return IRFileNode(
+                id=node.id,
+                type=node.type,
+                name=node.name,
+                source=node.source,
+                confidence=node.confidence,
+                file_path=file_path,
+                language=language,
+                role=role,
+                # The recorded import list rides along, and it is the whole
+                # reason this function exists: without it a skipped file
+                # rebuilds no edges and every import touching it disappears.
+                metadata=metadata,
+            )
+
+        file_by_id = {
+            node_id: _as_file_node(node)
+            for node_id, node in by_id.items()
+            if node_id in wanted
+        }
+
+        # Symbols hang off their file through a BELONGS_TO edge; group them so
+        # one pass over the edges serves every file.
+        symbols_by_file: dict[str, list] = {}
+        for edge in storage.get_all_edges():
+            if edge.type != EdgeType.BELONGS_TO or edge.to_node not in wanted:
+                continue
+            symbol = by_id.get(edge.from_node)
+            if symbol is not None:
+                symbols_by_file.setdefault(edge.to_node, []).append(symbol)
+
+        rebuilt: list = []
+        for file_id in wanted:
+            node = file_by_id.get(file_id)
+            if node is None:
+                continue
+            file_path = node.file_path
+            file_metadata = dict(node.metadata or {})
+
+            symbols: list[IRSymbol] = []
+            for symbol in symbols_by_file.get(file_id, ()):
+                properties = dict(symbol.metadata or {})
+                # A stored symbol row is an IRNode; kind and the line numbers
+                # live in metadata once flattened into a graph_nodes row.
+                symbols.append(
+                    IRSymbol(
+                        name=symbol.name,
+                        kind=_symbol_kind(properties.get("kind")),
+                        file_path=file_path,
+                        line_start=int(properties.get("line_start", 0) or 0),
+                        line_end=int(properties.get("line_end", 0) or 0),
+                        parent=properties.get("parent", ""),
+                    )
+                )
+
+            # The import list was recorded on the file node when this file was
+            # indexed; it is what lets its edges be rebuilt without its source.
+            dependencies = [
+                IRDependency(
+                    source_file=file_path,
+                    target_module=entry.get("target_module", ""),
+                    kind=entry.get("kind", ""),
+                    line=int(entry.get("line", 0) or 0),
+                    level=int(entry.get("level", 0) or 0),
+                )
+                for entry in (file_metadata.get("dependencies") or [])
+                if entry.get("target_module")
+            ]
+
+            rebuilt.append(
+                IRFileParseResult(
+                    file_path=file_path,
+                    language=node.language,
+                    file_node=node,
+                    symbols=tuple(symbols),
+                    dependencies=tuple(dependencies),
+                )
+            )
+        return rebuilt
 
     def _scan_repo_files(
         self,

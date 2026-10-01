@@ -1,0 +1,31 @@
+feat(index): re-index only what changed
+
+The previous attempt was reverted because skipping unchanged files left stale
+edges behind, and correctness won over speed. This fixes the cause instead of
+avoiding it.
+
+An import edge is only recomputed when both endpoints are parsed. A skipped
+file therefore contributed nothing, and three defects followed:
+
+- Dependencies were never stored, so a skipped file rebuilt no edges even in
+  principle. The import list now rides along on the file node's metadata.
+- _reconstruct_for_resolution read those dependencies back but the node id it
+  produced was missing from path_to_node_id, so the edge out of the skipped
+  file was dropped on the way to storage.
+- _touches_unreadable exempted every skipped file from stale-edge deletion,
+  which kept a deleted import in the graph forever.
+
+Skipped files are also opened, not just stat'd. An index that silently keeps
+a stale file because its mtime had not moved leaves the user believing the
+graph is current; a lock now shows up in the warnings.
+
+A file that fails to read keeps no stamp, so the next run retries it — the
+failure may have been an editor's lock rather than anything about the file.
+
+On 200 files: no change is 3x faster than a full index. One changed file is
+not faster, because the write still reads the whole node table.
+
+test_parse_failure_is_reported_not_swallowed now touches the file before the
+second index. An unchanged file is skipped by design, and a parser that was
+never asked cannot fail — the old version asserted that a skip would report
+a parse error, which is not a thing.
