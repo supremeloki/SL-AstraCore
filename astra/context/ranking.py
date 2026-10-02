@@ -36,6 +36,31 @@ def _is_test_file(node) -> bool:
     return stem.startswith("test_") or stem.endswith("_test")
 
 
+# Documentation and configuration repeat a question's words in prose, which is
+# why README.md outranked repository_scanner.py for "where are the scanner's
+# ignore rules defined" — it says the same sentence. A context pack is source
+# for an agent to read; prose about the source is a pointer to it.
+_PROSE_SUFFIXES = (".md", ".markdown", ".rst", ".txt", ".adoc")
+_CONFIG_NAMES = frozenset({
+    "pyproject.toml", "setup.cfg", "setup.py", "requirements.txt",
+    "dockerfile", "makefile", "tox.ini", "noxfile.py",
+})
+
+
+def _is_prose(node) -> bool:
+    """Documentation or config: words in prose, not in code."""
+    path = str(node.metadata.get("file_path", "") or node.properties.get("file_path", ""))
+    name = path.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    if name.endswith(_PROSE_SUFFIXES):
+        return True
+    if name in _CONFIG_NAMES:
+        return True
+    # requirements-dev.txt, constraints.in and friends: a dependency pin file
+    # lists every project's package names, which is the same as saying nothing.
+    stem = name.rsplit(".", 1)[0]
+    return stem.startswith(("requirements", "constraints")) and name.endswith((".txt", ".in"))
+
+
 class Ranking:
     def __init__(self, knowledge_graph, document_frequency=None, files_indexed=None):
         self._kg = knowledge_graph
@@ -117,10 +142,11 @@ class Ranking:
             # worth 15, so a file that actually mentions the query outranks a
             # merely central one instead of tying with it.
             match = self._text_match(node, terms)
-            if _is_test_file(node):
-                # A test is *about* the subject, which makes it a better lexical
-                # match than the implementation — so the penalty has to apply to
-                # the text term too, not just the structural part.
+            if _is_test_file(node) or _is_prose(node):
+                # A test is *about* the subject, and documentation says it in
+                # prose — both make a better lexical match than the
+                # implementation, so the penalty applies to the text term too,
+                # not just the structural part.
                 match *= 0.3
             score += 15.0 * match
 
@@ -132,7 +158,7 @@ class Ranking:
         # question regardless of the question.
         structural += min(_degree(self._adj.get(node_id, 0)), 6.0) * 0.5
         structural += min(_degree(self._reverse_adj.get(node_id, 0)), 6.0) * 0.6
-        if _is_test_file(node):
+        if _is_test_file(node) or _is_prose(node):
             # A test that exercises the answer is not the answer. An agent
             # reading a context pack needs the implementation; the test ranks
             # above it purely because its name repeats the query words.
@@ -313,9 +339,7 @@ class Ranking:
         hits = sum(1.0 + min(len(t), 12) / 12.0 for t in wanted if t in haystack)
         return hits / total
 
-    @staticmethod
-    @staticmethod
-    def _name_answers(node, terms) -> bool:
+    def _name_answers(self, node, terms) -> bool:
         """Does the file's own name answer the question?
 
         "how are nodes ranked by relevance" -> ranking.py: the name carries
@@ -337,7 +361,17 @@ class Ranking:
         overlap = wanted & name_terms
         if not overlap:
             return False
-        return len(overlap) >= 2 or len(overlap) == len(wanted)
+        if len(wanted) == 1:
+            return True
+        if len(overlap) >= 2 or len(overlap) == len(wanted):
+            return True
+        # One shared word out of several, but a rare one. "config" appears in
+        # a handful of files and config.py is named after it; "value" appears
+        # in most of them and a file named values.py is not the answer to
+        # anything specific.
+        total_files = self._files_indexed
+        rarest = min(self._document_frequency.get(word, 0) for word in overlap)
+        return rarest * 4 <= total_files
 
     def _compute_exact_symbol_names(self, terms) -> frozenset:
         """Stem sets that some symbol is named exactly. Computed once per rank."""
