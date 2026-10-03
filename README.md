@@ -164,8 +164,9 @@ Deliberate, not accidental:
   again, which makes a re-index with nothing to do about 3x faster than a full
   one, but the write still reads every node, so a run with one changed file
   costs about the same as a full index.
-- **Config files are not parsed.** `.json` / `.yaml` / `.toml` are indexed as
-  files with no structural detail.
+- **Config keys are indexed, values are not.** `.json` / `.yaml` / `.toml` are
+  parsed for their key paths (`server.port`), so a question about a setting
+  finds the file that declares it. The values themselves are not in the graph.
 - **BLIND_MAX depth.** Source nested deeper than ~900 levels (minified
   JavaScript) is skipped by the tree-sitter traversal.
 

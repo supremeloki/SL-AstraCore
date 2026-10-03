@@ -69,8 +69,9 @@ Reachable as `POST /api/agent/propose`, `astra propose --emit`, and
 - **Single-user access control.** A per-process token, not accounts. It binds
   all interfaces, so do not expose it beyond a trusted network. Set
   `ASTRA_TOKEN` to pin the token; there is no TLS.
-- **Config files are not parsed.** `.json` / `.yaml` / `.toml` are indexed as
-  files with no structural detail.
+- **Config keys are indexed, values are not.** `.json` / `.yaml` / `.toml` are
+  parsed for their key paths, so a question about a setting finds the file
+  that declares it. The values are not in the graph.
 - **A question with no searchable word returns nothing.** "fix it" has no
   term in any filename; name the subject.
 - **Tree-sitter needs a cache directory.** With neither `HOME` nor

@@ -1,0 +1,31 @@
+fix(parser): the universal parser had never run against a real file
+
+universal_parser.py measured 55% covered, and writing tests for it found that
+it could not have worked on the data the scanner actually produces.
+
+Every path raised AttributeError on a real FileNode. The module reads
+file_meta.id and file_meta.is_binary, both of which live on IRFileNode, not on
+the FileNode that astra.scanner hands it — eleven uses of .id and two of
+.is_binary. The only tests it had built a stub class in the test file and set
+both attributes by hand, so the gap was invisible.
+
+Two more, once the first was out of the way:
+
+- A config file that parsed but held no keys returned an empty element list,
+  which dropped the file from the graph entirely. It now falls back to a
+  placeholder element like every other parse path.
+- Python that does not compile raised SyntaxError out of parse_file.
+  parse_repository caught it and recorded a recoverable failure, but the
+  direct call — the obvious way to use the class — did not. It now returns a
+  low-confidence placeholder, so a broken file is still a node an agent can be
+  pointed at.
+
+Each fix was removed in turn and confirmed to fail a test; all four are caught.
+
+The README claimed config files were "indexed with no structural detail". They
+are not: _config_key_elements walks the parsed structure and emits key paths
+like server.port, which is what lets a question about a setting find the file
+that declares it. Both documents now say that, and say what is actually
+missing — the values.
+
+Coverage 88.3% -> 89.2%. 386 passed, ruff and mypy clean.

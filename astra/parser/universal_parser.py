@@ -15,6 +15,17 @@ from astra.models.parser import (
 logger = get_logger("astra.parser.universal_parser")
 
 
+def _file_id(file_meta) -> str:
+    """The node id for a file.
+
+    FileNode, which is what the scanner produces, has no `id` — the graph node
+    id is derived from the path. Reading file_meta.id raised AttributeError on
+    every real file, so this module had only ever run against a test stub that
+    invented the field.
+    """
+    return getattr(file_meta, "id", None) or f"file:{file_meta.rel_path}"
+
+
 class UniversalParser:
     def __init__(self, max_read_bytes=2_000_000):
         self._max_read_bytes = max_read_bytes
@@ -46,7 +57,10 @@ class UniversalParser:
         )
 
     def parse_file(self, file_meta):
-        if file_meta.is_binary:
+        # is_binary lives on IRFileNode, not on the FileNode the scanner
+        # produces, so reading it directly raised AttributeError on every real
+        # file. A file with no declared binary flag is text.
+        if getattr(file_meta, "is_binary", False):
             return self._binary_result(file_meta)
         source = self._read_text(file_meta)
         parser_name = self._parser_name(file_meta)
@@ -61,11 +75,25 @@ class UniversalParser:
     def _parse_python(self, file_meta, source, parser_name):
         elements = []
         dependencies = []
-        tree = ast.parse(source or "")
+        try:
+            tree = ast.parse(source or "")
+        except SyntaxError:
+            # A file that does not parse is still a file in the repository. The
+            # caller gets a node it can point at, and the graph is not missing
+            # the file entirely; parse_repository turns the raise into a
+            # recoverable ParserFailure, but a direct parse_file did not.
+            return ParsedFile(
+                file_id=_file_id(file_meta),
+                file_path=file_meta.rel_path,
+                language=file_meta.language or "",
+                parser_name=parser_name,
+                elements=[self._fallback_element(file_meta)],
+                confidence=0.2,
+            )
         module_id = self._element_id(file_meta, "module", file_meta.rel_path, 1)
         elements.append(StructuralElement(
             id=module_id,
-            file_id=file_meta.id,
+            file_id=_file_id(file_meta),
             file_path=file_meta.rel_path,
             name=file_meta.rel_path,
             kind=StructuralKind.MODULE,
@@ -98,7 +126,7 @@ class UniversalParser:
                         confidence=0.5,
                     ))
         return ParsedFile(
-            file_id=file_meta.id,
+            file_id=_file_id(file_meta),
             file_path=file_meta.rel_path,
             language=file_meta.language or "",
             parser_name=parser_name,
@@ -132,7 +160,7 @@ class UniversalParser:
                     confidence=0.8,
                 ))
         return ParsedFile(
-            file_id=file_meta.id,
+            file_id=_file_id(file_meta),
             file_path=file_meta.rel_path,
             language=file_meta.language or "markdown",
             parser_name=parser_name,
@@ -144,12 +172,15 @@ class UniversalParser:
     def _parse_config(self, file_meta, source, parser_name):
         data = self._load_structured_config(file_meta.rel_path, source)
         if data is not None:
+            keys = self._config_key_elements(file_meta, data)
             return ParsedFile(
-                file_id=file_meta.id,
+                file_id=_file_id(file_meta),
                 file_path=file_meta.rel_path,
                 language=file_meta.language or "",
                 parser_name=parser_name,
-                elements=self._config_key_elements(file_meta, data),
+                # A config that parses but holds no keys is still a file in the
+                # graph. Returning an empty element list dropped it entirely.
+                elements=keys or [self._fallback_element(file_meta)],
                 confidence=0.8,
             )
         elements = []
@@ -161,7 +192,7 @@ class UniversalParser:
             if key:
                 elements.append(self._element(file_meta, key, StructuralKind.CONFIG_KEY, line_no, line_no))
         return ParsedFile(
-            file_id=file_meta.id,
+            file_id=_file_id(file_meta),
             file_path=file_meta.rel_path,
             language=file_meta.language or "",
             parser_name=parser_name,
@@ -205,7 +236,7 @@ class UniversalParser:
 
     def _parse_generic(self, file_meta, source, parser_name):
         return ParsedFile(
-            file_id=file_meta.id,
+            file_id=_file_id(file_meta),
             file_path=file_meta.rel_path,
             language=file_meta.language or "",
             parser_name=parser_name,
@@ -215,7 +246,7 @@ class UniversalParser:
 
     def _binary_result(self, file_meta):
         return ParsedFile(
-            file_id=file_meta.id,
+            file_id=_file_id(file_meta),
             file_path=file_meta.rel_path,
             language=file_meta.language or "",
             parser_name="binary",
@@ -227,7 +258,7 @@ class UniversalParser:
     def _element(self, file_meta, name, kind, line_start, line_end, metadata=None):
         return StructuralElement(
             id=self._element_id(file_meta, kind.value, name, line_start),
-            file_id=file_meta.id,
+            file_id=_file_id(file_meta),
             file_path=file_meta.rel_path,
             name=name,
             kind=kind,
@@ -239,7 +270,7 @@ class UniversalParser:
     def _fallback_element(self, file_meta, source=""):
         return StructuralElement(
             id=self._element_id(file_meta, "text", file_meta.rel_path, 1),
-            file_id=file_meta.id,
+            file_id=_file_id(file_meta),
             file_path=file_meta.rel_path,
             name=file_meta.rel_path,
             kind=StructuralKind.TEXT_BLOCK,
@@ -251,7 +282,7 @@ class UniversalParser:
     def _element_id(self, file_meta, kind, name, line):
         from astra.scanner.hash_engine import HashEngine
 
-        return HashEngine().hash_string(f"{file_meta.id}:{kind}:{name}:{line}")
+        return HashEngine().hash_string(f"{_file_id(file_meta)}:{kind}:{name}:{line}")
 
     def _read_text(self, file_meta):
         if file_meta.size_bytes > self._max_read_bytes:
@@ -265,7 +296,7 @@ class UniversalParser:
                 return f.read()
 
     def _parser_name(self, file_meta):
-        if file_meta.is_binary:
+        if getattr(file_meta, "is_binary", False):
             return "binary"
         return f"{file_meta.language or file_meta.category.value}_parser"
 
