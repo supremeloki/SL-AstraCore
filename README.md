@@ -132,7 +132,7 @@ RepositoryScanner → ParserRegistry → ImportResolver → DuckDB/SQLite
 ## Quality
 
 ```bash
-python -m pytest tests/ -q                      # 331 passed, 1 skipped
+python -m pytest tests/ -q                      # 418 passed, 1 skipped
 python -m mypy astra/ dashboard_app.py          # Success: no issues in 96 files
 python -m ruff check astra/ tests/ dashboard_app.py   # All checks passed
 ```
@@ -145,7 +145,7 @@ across Linux and Windows. Measured on this repository:
 |---|---|
 | index 3,000 files | 7.5s (402 files/s) |
 | query | 62ms median |
-| ranking accuracy, 12 real questions | 11/12 first place, 12/12 top three |
+| ranking accuracy, 12 real questions | 8/12 first place, 12/12 top three |
 | pack carrying source at a 4k budget | 8 of 13 nodes |
 
 ### Known limitations

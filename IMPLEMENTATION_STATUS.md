@@ -25,14 +25,14 @@ RepositoryScanner -> ParserRegistry -> import_resolver -> DuckDB -> context stac
 | re-index, nothing changed | 0.36s |
 | index 3,000 files | 7.5s (402 files/s) |
 | query | 62ms median |
-| ranking accuracy, 12 real questions | 11/12 first place, 12/12 top three |
+| ranking accuracy, 12 real questions | 8/12 first place, 12/12 top three |
 | pack carrying source, 4k budget | 8 of 13 nodes |
 | source per 8x budget | 8.0x |
-| test coverage | 88% of statement lines, no file at zero |
+| test coverage | 90% of statement lines, no file at zero |
 
 | Gate | |
 |---|---|
-| `pytest tests/ -q` | 331 passed, 1 skipped |
+| `pytest tests/ -q` | 418 passed, 1 skipped |
 | `ruff check astra/ tests/ dashboard_app.py` | clean |
 | `mypy astra/ dashboard_app.py` | clean, 96 files |
 | Linux + Windows, Python 3.11 and 3.12 | green |
