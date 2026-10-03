@@ -1,0 +1,30 @@
+fix(lock): a killed process never released the lock on Windows
+
+repo_lock.py measured 60% covered, and the uncovered part was the stale
+check — the code that decides whether a lock file outlived the process that
+made it. It had never worked on Windows.
+
+os.kill(pid, 0) is how POSIX asks "does this process exist". On Windows it
+is not that: for a process that has actually terminated it returns without
+raising, so _is_stale reported a dead holder as live and the database could
+not be opened again, by any process, ever. Verified directly — spawning a
+child, killing it, then calling os.kill on its pid gives no error on Windows.
+
+Windows now asks tasklist, which reports the truth. Both streams are read
+because tasklist puts "The search filter cannot be recognized" on stderr, and
+that is the answer for a pid outside the range it can represent — also not
+running. When tasklist produces nothing at all, the pid is assumed live,
+which means waiting rather than stealing.
+
+The POSIX branch also gained the errno cases; EINVAL there means the same
+thing it means on Windows.
+
+test_repo_lock_stale.py covers the branches that only happen after a crash: a
+dead holder's lock is reclaimed (a real child process, killed, then the lock
+taken), a live holder's is not, an unreadable pid and an unsignalable one are
+both assumed live, and a pid tasklist answers "running" for is found. That
+last one matters because every other case returns False — a check that always
+said "not running" would pass them all while stealing the lock out from
+under a live index.
+
+414 -> 418 tests, coverage up, ruff and mypy clean.

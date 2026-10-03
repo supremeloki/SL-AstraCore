@@ -20,6 +20,7 @@ from __future__ import annotations
 import contextlib
 import errno
 import os
+import subprocess
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -74,6 +75,34 @@ def file_lock(path: str, timeout: float = DEFAULT_TIMEOUT):
                 lock_path.unlink()
 
 
+def _process_exists_windows(pid: int) -> bool:
+    """Whether a pid is running, on Windows.
+
+    os.kill(pid, 0) is not that test here: for a process that has actually
+    terminated it returns without raising, so a killed holder's lock file
+    looked live forever and the database could not be opened again. tasklist
+    reports the truth.
+    """
+    try:
+        result = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return True  # cannot tell; assume live, which means waiting
+    combined = f"{result.stdout}\n{result.stderr}".strip()
+    if not combined:
+        # No answer at all: assume live, which means waiting rather than stealing.
+        return True
+    # "no tasks are running" means dead. "The search filter cannot be
+    # recognized" means the pid is outside the range tasklist can represent,
+    # which also means it is not running. Anything else that names the pid
+    # means it is. stdout alone is not enough: the error goes to stderr.
+    if "no tasks" in combined.lower() or "cannot be recognized" in combined.lower():
+        return False
+    return str(pid) in result.stdout
+
+
 def _is_stale(lock_path: Path) -> bool:
     """True when the lock file's owner is no longer running.
 
@@ -87,14 +116,22 @@ def _is_stale(lock_path: Path) -> bool:
         return False
     if pid == os.getpid():
         return False
+
+    if os.name == "nt":
+        return not _process_exists_windows(pid)
+
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
         return True
     except PermissionError:
+        # The process exists; this user just cannot signal it.
         return False
-    except OSError:
-        return False
+    except OSError as exc:
+        return exc.errno in (errno.EINVAL, errno.ESRCH)
+    except (OverflowError, ValueError):
+        # A pid outside the platform's range cannot be running.
+        return True
     return False
 
 
