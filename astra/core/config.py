@@ -1,4 +1,6 @@
+import copy
 import os
+
 from astra.core.constants import ROOT_DIR
 
 try:
@@ -36,11 +38,23 @@ class Config:
 
     def _load(self):
         config_path = os.path.join(self._project_path, "astra.yaml")
-        if os.path.isfile(config_path):
+        if not os.path.isfile(config_path):
+            self._raw = {}
+            return
+        try:
             with open(config_path, "r", encoding="utf-8") as f:
                 content = f.read()
-                self._raw = self._load_yaml(content)
-        else:
+        except OSError:
+            # An unreadable settings file is a reason to use the defaults, not
+            # a reason for every Config() in the process to fail.
+            self._raw = {}
+            return
+        try:
+            self._raw = self._load_yaml(content)
+        except Exception:
+            # Malformed yaml — a stray tab, a stray control character — used to
+            # make Config() raise, so a typo in astra.yaml disabled the whole
+            # tool. The defaults are a working configuration.
             self._raw = {}
 
     def _load_yaml(self, content):
@@ -115,4 +129,10 @@ class Config:
 
     @property
     def raw(self):
-        return dict(self._raw)
+        """The file as parsed, detached from the live settings.
+
+        A shallow dict(self._raw) left the nested sections shared, so a caller
+        mutating config.raw["scanner"]["worker_count"] changed what get()
+        returns — a read that quietly edits.
+        """
+        return copy.deepcopy(self._raw)
